@@ -1,0 +1,90 @@
+:root {
+  color-scheme: dark;
+  --cyan: #68e8ef;
+  --cyan-soft: rgba(104, 232, 239, .16);
+  --amber: #f2ad45;
+  --red: #ff654e;
+  --ink: #061014;
+  --panel: rgba(7, 18, 22, .78);
+  font-family: "Arial Narrow", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #03090c; }
+button { font: inherit; }
+kbd { font: 700 11px/1 "Barlow Condensed", sans-serif; letter-spacing: .08em; }
+
+#game-shell { position: relative; width: 100%; height: 100%; isolation: isolate; background: #061014; }
+#game { display: block; width: 100%; height: 100%; cursor: crosshair; image-rendering: auto; }
+.is-hidden { display: none !important; }
+
+.landing {
+  position: absolute; inset: 0; z-index: 20; overflow: hidden;
+  background: url("assets/museum-arena.png") center 45% / cover no-repeat;
+}
+.landing::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(2,8,11,.96) 0%, rgba(2,8,11,.76) 35%, rgba(2,8,11,.12) 69%, rgba(2,8,11,.5)), linear-gradient(0deg, rgba(2,8,11,.9), transparent 45%); }
+.landing-shade { position: absolute; inset: 0; z-index: 1; opacity: .22; background-image: linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px); background-size: 52px 52px; mask-image: linear-gradient(90deg, #000, transparent 70%); }
+.brand { position: absolute; z-index: 3; top: 30px; left: 42px; display: flex; gap: 12px; align-items: center; color: #d8f7f7; font: 700 13px/1 "Barlow Condensed"; letter-spacing: .18em; }
+.brand-mark { display: grid; place-items: center; width: 31px; height: 31px; border: 1px solid var(--cyan); color: var(--cyan); clip-path: polygon(0 0, 100% 0, 100% 72%, 72% 100%, 0 100%); }
+.landing-copy { position: absolute; z-index: 3; left: clamp(34px, 8vw, 128px); top: 50%; transform: translateY(-52%); max-width: 670px; }
+.eyebrow { color: var(--cyan); font: 700 13px/1 "Barlow Condensed"; letter-spacing: .32em; }
+.landing h1 { margin: 14px 0 22px; color: #edf7f4; font: 900 clamp(72px, 10vw, 154px)/.72 "Noto Sans SC"; letter-spacing: -.08em; text-shadow: 0 12px 40px rgba(0,0,0,.58); }
+.landing h1 em { color: transparent; font-style: normal; -webkit-text-stroke: 2px rgba(237,247,244,.76); }
+.lead { margin: 0 0 28px; color: rgba(226,239,237,.76); font-size: 14px; line-height: 1.9; letter-spacing: .05em; }
+.primary-button { position: relative; display: inline-flex; align-items: center; justify-content: space-between; gap: 44px; min-width: 226px; padding: 16px 18px 16px 22px; border: 1px solid rgba(104,232,239,.65); color: #031013; background: var(--cyan); cursor: pointer; clip-path: polygon(0 0, 94% 0, 100% 30%, 100% 100%, 0 100%); transition: transform .2s, filter .2s; }
+.primary-button:hover { transform: translateY(-2px); filter: brightness(1.12); }
+.primary-button span { font-weight: 900; letter-spacing: .14em; }
+.primary-button kbd { padding: 5px 7px; border: 1px solid rgba(0,0,0,.35); }
+.feature-row { display: flex; align-items: center; gap: 12px; margin-top: 24px; color: rgba(220,240,239,.5); font: 600 11px/1 "Barlow Condensed"; letter-spacing: .16em; }
+.feature-row i { width: 3px; height: 3px; background: var(--cyan); transform: rotate(45deg); }
+.briefing { position: absolute; z-index: 3; right: 42px; top: 32px; width: 250px; padding: 17px 20px; background: rgba(4,13,16,.68); border-top: 1px solid rgba(104,232,239,.5); backdrop-filter: blur(12px); }
+.briefing > p { display: flex; justify-content: space-between; margin: 0 0 13px; color: var(--cyan); font: 700 11px/1 "Barlow Condensed"; letter-spacing: .16em; }
+.briefing dl { margin: 0; }
+.briefing dl div { display: flex; justify-content: space-between; padding: 7px 0; border-top: 1px solid rgba(255,255,255,.08); font-size: 11px; }
+.briefing dt { color: rgba(255,255,255,.35); }.briefing dd { margin: 0; color: rgba(255,255,255,.82); }
+.controls-strip { position: absolute; z-index: 3; left: 42px; right: 42px; bottom: 26px; display: flex; gap: 24px; align-items: center; color: rgba(255,255,255,.48); font-size: 11px; letter-spacing: .05em; }
+.controls-strip kbd { color: var(--cyan); margin-right: 5px; }
+
+.hud { position: absolute; inset: 0; z-index: 10; pointer-events: none; color: white; }
+.top-bar { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); display: flex; align-items: stretch; font-family: "Barlow Condensed"; }
+.team-score { display: flex; align-items: center; gap: 14px; min-width: 132px; padding: 7px 12px; background: var(--panel); border-top: 1px solid; }
+.team-score span { font-weight: 700; font-size: 11px; letter-spacing: .18em; }.team-score strong { font-size: 26px; line-height: 1; }
+.team-score.seals { justify-content: flex-end; border-color: var(--cyan); color: var(--cyan); }.team-score.tangos { border-color: var(--red); color: var(--red); }
+.mission-clock { display: grid; place-items: center; min-width: 94px; padding: 5px 14px; background: rgba(2,8,10,.9); border-inline: 1px solid rgba(255,255,255,.08); }
+.mission-clock b { font-size: 18px; letter-spacing: .1em; }.mission-clock span { color: rgba(255,255,255,.35); font-size: 8px; letter-spacing: .18em; }
+.status-panel { position: absolute; left: 28px; bottom: 32px; width: 182px; padding-left: 10px; border-left: 2px solid var(--cyan); font-family: "Barlow Condensed"; }
+.status-panel p { margin: 0 0 10px; color: rgba(255,255,255,.45); font-size: 10px; letter-spacing: .18em; }
+.health-line { display: flex; justify-content: space-between; align-items: end; }.health-line span { font-size: 10px; letter-spacing: .15em; }.health-line b { font-size: 27px; line-height: .8; }
+.health-track { height: 3px; margin-top: 9px; background: rgba(255,255,255,.15); }.health-track i { display: block; width: 100%; height: 100%; background: var(--cyan); box-shadow: 0 0 10px var(--cyan); transition: width .2s; }
+.radar-wrap { position: absolute; top: 26px; right: 27px; width: 210px; background: rgba(2,9,12,.72); border: 1px solid rgba(104,232,239,.18); }
+.radar-head { display: flex; justify-content: space-between; padding: 7px 10px; color: rgba(255,255,255,.4); font: 600 9px/1 "Barlow Condensed"; letter-spacing: .15em; }.radar-head b { color: var(--cyan); }
+#radar { display: block; width: 210px; height: 150px; }
+.weapon-panel { position: absolute; right: 28px; bottom: 29px; width: 260px; text-align: right; font-family: "Barlow Condensed"; }
+.weapon-panel p { margin: 0 0 5px; color: var(--cyan); font-size: 9px; letter-spacing: .18em; }.weapon-panel div { display: flex; justify-content: flex-end; gap: 14px; align-items: baseline; }.weapon-panel strong { font-size: 20px; letter-spacing: .08em; }.weapon-panel b { color: var(--cyan); font-size: 37px; }.weapon-panel > span { color: rgba(255,255,255,.36); font-size: 10px; letter-spacing: .12em; }
+.kill-feed { position: absolute; right: 28px; top: 210px; display: grid; gap: 5px; text-align: right; font: 600 11px/1.4 "Barlow Condensed"; }
+.kill-feed p { margin: 0; padding: 7px 9px; background: rgba(2,8,10,.5); animation: feed-in .25s ease-out; }.kill-feed .ally { color: var(--cyan); }.kill-feed .enemy { color: var(--red); }.kill-feed b { color: rgba(255,255,255,.45); margin: 0 7px; }
+@keyframes feed-in { from { opacity: 0; transform: translateX(15px); } }
+.interaction { position: absolute; left: 50%; bottom: 26%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 8px 13px; background: rgba(2,9,12,.78); border: 1px solid rgba(104,232,239,.28); font-size: 12px; }.interaction kbd { display: grid; place-items: center; width: 24px; height: 24px; color: #061014; background: var(--cyan); }
+.announcement { position: absolute; top: 27%; left: 50%; transform: translateX(-50%); padding: 8px 22px; color: var(--amber); background: rgba(4,10,12,.75); border-block: 1px solid rgba(242,173,69,.4); font: 700 15px/1 "Barlow Condensed"; letter-spacing: .18em; animation: announcement .2s ease-out; }
+@keyframes announcement { from { opacity: 0; transform: translate(-50%, -8px) scale(.96); } }
+.crosshair { position: absolute; width: 34px; height: 34px; left: 50%; top: 50%; transform: translate(-50%,-50%); transition: opacity .12s; }.crosshair i { position: absolute; background: rgba(225,255,255,.88); box-shadow: 0 0 3px #000; }.crosshair i:nth-child(1),.crosshair i:nth-child(2) { width: 7px; height: 1px; top: 16px; }.crosshair i:nth-child(1){left:2px}.crosshair i:nth-child(2){right:2px}.crosshair i:nth-child(3),.crosshair i:nth-child(4){width:1px;height:7px;left:16px}.crosshair i:nth-child(3){top:2px}.crosshair i:nth-child(4){bottom:2px}.crosshair b { position:absolute; width:3px;height:3px;left:15px;top:15px;border:1px solid white;border-radius:50%; }
+.hit-marker { position: absolute; left: 50%; top: 50%; opacity: 0; transform: translate(-50%,-54%) rotate(45deg); color: white; font: 500 34px/1 sans-serif; text-shadow: 0 0 8px #000; transition: opacity .08s; }.hit-marker.show { opacity: 1; }
+.scope { display: none; position: absolute; inset: 0; overflow: hidden; background: radial-gradient(circle at center, transparent 0 33vh, rgba(0,0,0,.985) 33.4vh); }.scope-ring { position:absolute; width:66vh;height:66vh;left:50%;top:50%;transform:translate(-50%,-50%);border:2px solid rgba(0,0,0,.9);border-radius:50%;box-shadow:inset 0 0 40px rgba(0,0,0,.5); }.scope > i { position:absolute; left:50%;top:50%;background:rgba(6,10,10,.84);transform:translate(-50%,-50%); }.scope-h{width:66vh;height:1px}.scope-v{height:66vh;width:1px}.scope span{position:absolute;left:calc(50% + 27vh);top:calc(50% + 26vh);color:rgba(255,255,255,.5);font:600 10px "Barlow Condensed"}.hud.scoped .scope{display:block}.hud.scoped .crosshair{opacity:0}.hud.scoped .weapon-panel{opacity:.35}
+.vignette { position:absolute;inset:0;background:radial-gradient(circle,transparent 48%,rgba(0,0,0,.35) 100%);mix-blend-mode:multiply; }
+.tank-hud { position:absolute;left:50%;bottom:29px;transform:translateX(-50%);width:270px;text-align:center;font-family:"Barlow Condensed"; }.tank-hud > span { position:absolute;left:0;bottom:9px;color:rgba(255,255,255,.5);font-size:10px;letter-spacing:.14em}.tank-hud > span b{color:var(--cyan)}.tank-hud strong{font-size:42px;line-height:.8}.tank-hud small{margin-left:5px;color:var(--cyan)}.tank-hud p{margin:8px 0 0;color:rgba(255,255,255,.4);font-size:9px;letter-spacing:.17em}
+.modal { position:absolute;z-index:30;left:50%;top:50%;transform:translate(-50%,-50%);width:min(410px,calc(100% - 34px));padding:36px;text-align:center;background:rgba(3,11,14,.92);border:1px solid rgba(104,232,239,.25);box-shadow:0 30px 100px rgba(0,0,0,.7);backdrop-filter:blur(12px); }.modal>p:first-child{margin:0;color:var(--cyan);font:700 10px "Barlow Condensed";letter-spacing:.24em}.modal h2{margin:10px 0;font-size:34px}.modal>p{color:rgba(255,255,255,.48);font-size:12px}.modal .primary-button{margin-top:14px}
+.mobile-controls { display:none; }
+
+@media (max-width: 820px), (pointer: coarse) {
+  .briefing,.controls-strip,.desktop-only { display:none; }
+  .brand { left:20px;top:20px }.landing-copy{left:25px;right:25px;top:52%}.landing h1{font-size:clamp(68px,23vw,112px)}.lead{font-size:12px}.feature-row{gap:8px;font-size:9px}
+  .top-bar{top:10px}.team-score{min-width:88px;padding:5px 7px;gap:7px}.team-score span{font-size:8px}.team-score strong{font-size:21px}.mission-clock{min-width:68px;padding:4px 7px}
+  .radar-wrap{right:10px;top:64px;width:132px}.radar-head{padding:5px 7px}#radar{width:132px;height:96px}
+  .weapon-panel{right:12px;bottom:16px;width:185px}.weapon-panel strong{font-size:14px}.weapon-panel b{font-size:27px}.status-panel{left:14px;bottom:16px;width:126px}.kill-feed{top:166px;right:10px}.interaction{bottom:35%}
+  .mobile-controls { display:block; position:absolute;inset:0;pointer-events:none; }.mobile-controls button{pointer-events:auto;position:absolute;width:48px;height:48px;border-radius:50%;border:1px solid rgba(104,232,239,.35);color:#dff;background:rgba(5,18,22,.58);font-weight:700}.mobile-controls button[data-action="scope"]{right:84px;bottom:128px}.mobile-controls button[data-action="grenade"]{right:23px;bottom:149px}.mobile-controls button[data-action="interact"]{right:145px;bottom:94px}.mobile-controls .fire-button{right:26px;bottom:66px;width:78px;height:78px;border-color:rgba(255,101,78,.55);background:rgba(150,30,20,.3)}
+  .move-pad{pointer-events:auto;position:absolute;left:22px;bottom:66px;width:116px;height:116px;border:1px solid rgba(104,232,239,.2);border-radius:50%;background:rgba(5,18,22,.3)}.move-pad i{position:absolute;width:48px;height:48px;left:34px;top:34px;border-radius:50%;background:rgba(104,232,239,.22);border:1px solid rgba(104,232,239,.44)}
+}
+
+@media (max-height: 560px) {
+  .landing-copy{top:48%}.landing h1{font-size:60px;margin:8px 0 14px}.lead{margin-bottom:15px}.feature-row{display:none}.brand{top:12px}.radar-wrap{display:none}.kill-feed{top:60px}.weapon-panel,.status-panel{bottom:8px}
+}

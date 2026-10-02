@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#071014" />
+    <meta name="description" content="史前禁区：原创恐龙博物馆 4v4 H5 战术射击游戏" />
+    <title>史前禁区 · Museum Lockdown</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main id="game-shell">
+      <canvas id="game" aria-label="游戏画面"></canvas>
+
+      <section id="landing" class="landing">
+        <div class="landing-shade"></div>
+        <header class="brand"><span class="brand-mark">M</span><span>MUSEUM // LOCKDOWN</span></header>
+        <div class="landing-copy">
+          <p class="eyebrow">4V4 · TEAM DEATHMATCH · H5</p>
+          <h1>史前<br /><em>禁区</em></h1>
+          <p class="lead">午夜，恐龙博物馆。两支小队争夺中庭，<br class="desktop-only" />而装甲载具正停在南侧货运通道。</p>
+          <button id="start-button" class="primary-button">
+            <span>进入战区</span><kbd>ENTER</kbd>
+          </button>
+          <div class="feature-row">
+            <span>巴雷特</span><i></i><span>无限弹药</span><i></i><span>可驾驶坦克</span>
+          </div>
+        </div>
+        <aside class="briefing">
+          <p>作战简报 <b>01</b></p>
+          <dl>
+            <div><dt>地点</dt><dd>自然历史馆 · 中庭</dd></div>
+            <div><dt>任务</dt><dd>率先取得 15 次击杀</dd></div>
+            <div><dt>编制</dt><dd>海豹 4 / 恐怖分子 4</dd></div>
+          </dl>
+        </aside>
+        <div class="controls-strip">
+          <span><kbd>WASD</kbd> 移动</span>
+          <span><kbd>鼠标</kbd> 瞄准</span>
+          <span><kbd>左键</kbd> 攻击</span>
+          <span><kbd>右键</kbd> 开镜</span>
+          <span><kbd>1/2/3</kbd> 切换武器</span>
+          <span><kbd>G</kbd> 手雷</span>
+          <span><kbd>F</kbd> 驾驶</span>
+        </div>
+      </section>
+
+      <section id="hud" class="hud is-hidden" aria-live="polite">
+        <div class="top-bar">
+          <div class="team-score seals"><span>SEALS</span><strong id="seal-score">00</strong></div>
+          <div class="mission-clock"><b id="clock">05:00</b><span>先到 15 分</span></div>
+          <div class="team-score tangos"><strong id="terror-score">00</strong><span>TANGOS</span></div>
+        </div>
+
+        <div class="status-panel">
+          <p id="location">恐龙中庭</p>
+          <div class="health-line"><span>生命</span><b id="health">100</b></div>
+          <div class="health-track"><i id="health-fill"></i></div>
+        </div>
+
+        <div id="kill-feed" class="kill-feed"></div>
+        <div id="interaction" class="interaction is-hidden"><kbd>F</kbd><span>驾驶 M-77 主战坦克</span></div>
+        <div id="announcement" class="announcement is-hidden"></div>
+
+        <div id="crosshair" class="crosshair"><i></i><i></i><i></i><i></i><b></b></div>
+        <div id="hit-marker" class="hit-marker">×</div>
+        <div id="scope" class="scope"><div class="scope-ring"></div><i class="scope-h"></i><i class="scope-v"></i><span>8×</span></div>
+        <div class="vignette"></div>
+
+        <aside class="radar-wrap">
+          <div class="radar-head"><span>战术雷达</span><b id="alive-count">4 : 4</b></div>
+          <canvas id="radar" width="210" height="150"></canvas>
+        </aside>
+
+        <aside class="weapon-panel">
+          <p id="weapon-slot">主武器 / 01</p>
+          <div><strong id="weapon-name">BARRETT M82A1</strong><b id="ammo">∞</b></div>
+          <span id="weapon-mode">.50 BMG · 栓动狙击步枪</span>
+        </aside>
+
+        <div id="tank-hud" class="tank-hud is-hidden">
+          <span>装甲 <b id="tank-health">100</b></span>
+          <strong id="tank-speed">000</strong><small>KM/H</small>
+          <p>CHASE CAM · 主炮就绪</p>
+        </div>
+
+        <div id="mobile-controls" class="mobile-controls">
+          <div id="move-pad" class="move-pad"><i id="move-stick"></i></div>
+          <button data-action="scope">镜</button>
+          <button data-action="grenade">雷</button>
+          <button data-action="interact">F</button>
+          <button data-action="fire" class="fire-button">开火</button>
+        </div>
+      </section>
+
+      <section id="modal" class="modal is-hidden">
+        <p id="modal-kicker">行动暂停</p>
+        <h2 id="modal-title">重新部署</h2>
+        <p id="modal-copy">点击继续并重新锁定鼠标</p>
+        <button id="resume-button" class="primary-button"><span>继续行动</span><kbd>ENTER</kbd></button>
+      </section>
+    </main>
+
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>
