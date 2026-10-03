@@ -2,86 +2,133 @@ export class InputController {
   constructor(canvas) {
     this.canvas = canvas;
     this.keys = new Set();
-    this.queue = [];
-    this.fireHeld = false;
+    this.items = [];
     this.yaw = 0;
-    this.touchMove = { x: 0, y: 0 };
-    this.aimTouch = null;
-    this.bindDesktop();
+    this.fireHeld = false;
+    this.touchAim = null;
+    this.moveTouch = null;
+    this.touchMovement = { x: 0, y: 0 };
+    this.bindKeyboard();
+    this.bindMouse();
     this.bindTouch();
   }
 
-  bindDesktop() {
+  bindKeyboard() {
     window.addEventListener("keydown", event => {
       this.keys.add(event.code);
-      const actions = { Digit1: ["weapon", "sniper"], Digit2: ["weapon", "grenade"], Digit3: ["weapon", "knife"], KeyG: ["grenade"], KeyF: ["interact"], KeyR: ["reset"], Escape: ["pause"] };
-      if (!event.repeat && actions[event.code]) this.queue.push(actions[event.code]);
+      if (event.repeat) return;
+      const slots = { Digit1: "primary", Digit2: "secondary", Digit3: "melee" };
+      if (slots[event.code]) this.items.push(["weaponSlot", slots[event.code]]);
+      if (event.code === "KeyG") this.items.push(["grenade"]);
+      if (event.code === "KeyB") this.items.push(["backpack"]);
+      if (event.code === "KeyF") this.items.push(["interact"]);
+      if (event.code === "Escape") this.items.push(["pause"]);
     });
     window.addEventListener("keyup", event => this.keys.delete(event.code));
-    window.addEventListener("mousemove", event => {
+  }
+
+  bindMouse() {
+    this.canvas.addEventListener("contextmenu", event => event.preventDefault());
+    this.canvas.addEventListener("mousemove", event => {
       if (document.pointerLockElement === this.canvas) this.yaw += event.movementX * .00215;
     });
     this.canvas.addEventListener("mousedown", event => {
-      if (document.pointerLockElement !== this.canvas) {
-        const request = this.canvas.requestPointerLock?.();
-        request?.catch?.(() => {});
-        return;
+      if (event.button === 0) { this.fireHeld = true; this.items.push(["fire"]); }
+      if (event.button === 2) this.items.push(["scope"]);
+      if (typeof this.canvas.requestPointerLock === "function" && navigator.maxTouchPoints === 0) {
+        try {
+          const request = this.canvas.requestPointerLock();
+          if (request && typeof request.catch === "function") request.catch(() => {});
+        } catch (error) {}
       }
-      if (event.button === 0) { this.fireHeld = true; this.queue.push(["fire"]); }
-      if (event.button === 2) this.queue.push(["scope"]);
     });
     window.addEventListener("mouseup", event => { if (event.button === 0) this.fireHeld = false; });
-    this.canvas.addEventListener("contextmenu", event => event.preventDefault());
   }
 
   bindTouch() {
     const pad = document.querySelector("#move-pad");
     const stick = document.querySelector("#move-stick");
-    if (!pad) return;
-    const updatePad = touch => {
-      const rect = pad.getBoundingClientRect();
-      const x = touch.clientX - rect.left - rect.width / 2;
-      const y = touch.clientY - rect.top - rect.height / 2;
-      const length = Math.hypot(x, y) || 1;
-      const radius = Math.min(34, length);
-      this.touchMove = { x: x / Math.max(34, length), y: y / Math.max(34, length) };
-      stick.style.transform = `translate(${x / length * radius}px,${y / length * radius}px)`;
-    };
-    pad.addEventListener("touchstart", event => { event.preventDefault(); updatePad(event.changedTouches[0]); }, { passive: false });
-    pad.addEventListener("touchmove", event => { event.preventDefault(); updatePad(event.changedTouches[0]); }, { passive: false });
-    const releasePad = () => { this.touchMove = { x: 0, y: 0 }; stick.style.transform = ""; };
-    pad.addEventListener("touchend", releasePad); pad.addEventListener("touchcancel", releasePad);
+    if (pad) {
+      const updatePad = touch => {
+        const rect = pad.getBoundingClientRect();
+        const x = touch.clientX - (rect.left + rect.width / 2);
+        const y = touch.clientY - (rect.top + rect.height / 2);
+        const radius = rect.width * .34;
+        const length = Math.hypot(x, y) || 1;
+        const scale = Math.min(1, radius / length);
+        const px = x * scale;
+        const py = y * scale;
+        this.touchMovement = { x: px / radius, y: py / radius };
+        if (stick) stick.style.transform = `translate(${px}px, ${py}px)`;
+      };
+      pad.addEventListener("touchstart", event => {
+        event.preventDefault();
+        const touch = event.changedTouches[0];
+        this.moveTouch = touch.identifier;
+        updatePad(touch);
+      }, { passive: false });
+      pad.addEventListener("touchmove", event => {
+        const touch = [...event.changedTouches].find(item => item.identifier === this.moveTouch);
+        if (!touch) return;
+        event.preventDefault();
+        updatePad(touch);
+      }, { passive: false });
+      const release = event => {
+        if (![...event.changedTouches].some(item => item.identifier === this.moveTouch)) return;
+        this.moveTouch = null;
+        this.touchMovement = { x: 0, y: 0 };
+        if (stick) stick.style.transform = "translate(0, 0)";
+      };
+      pad.addEventListener("touchend", release, { passive: true });
+      pad.addEventListener("touchcancel", release, { passive: true });
+    }
 
     this.canvas.addEventListener("touchstart", event => {
-      const touch = [...event.changedTouches].find(item => item.clientX > innerWidth * .42);
-      if (touch) this.aimTouch = { id: touch.identifier, x: touch.clientX };
+      const touch = event.changedTouches[0];
+      if (!touch || event.target !== this.canvas) return;
+      this.touchAim = { id: touch.identifier, x: touch.clientX };
     }, { passive: true });
     this.canvas.addEventListener("touchmove", event => {
-      const touch = [...event.changedTouches].find(item => item.identifier === this.aimTouch?.id);
+      if (!this.touchAim) return;
+      const touch = [...event.changedTouches].find(item => item.identifier === this.touchAim.id);
       if (!touch) return;
-      this.yaw += (touch.clientX - this.aimTouch.x) * .006;
-      this.aimTouch.x = touch.clientX;
-    }, { passive: true });
+      event.preventDefault();
+      this.yaw += (touch.clientX - this.touchAim.x) * .0052;
+      this.touchAim.x = touch.clientX;
+    }, { passive: false });
     this.canvas.addEventListener("touchend", event => {
-      if ([...event.changedTouches].some(item => item.identifier === this.aimTouch?.id)) this.aimTouch = null;
-    });
+      if (this.touchAim && [...event.changedTouches].some(item => item.identifier === this.touchAim.id)) this.touchAim = null;
+    }, { passive: true });
 
-    document.querySelectorAll("[data-action]").forEach(button => {
+    document.querySelectorAll("#mobile-controls [data-action]").forEach(button => {
       const action = button.dataset.action;
-      const start = event => { event.preventDefault(); action === "fire" ? (this.fireHeld = true) : null; this.queue.push([action]); };
-      button.addEventListener("touchstart", start, { passive: false });
-      button.addEventListener("mousedown", start);
-      const stop = () => { if (action === "fire") this.fireHeld = false; };
-      button.addEventListener("touchend", stop); button.addEventListener("mouseup", stop);
+      button.addEventListener("touchstart", event => {
+        event.preventDefault();
+        if (action === "fire") this.fireHeld = true;
+        this.items.push([action]);
+      }, { passive: false });
+      button.addEventListener("touchend", event => {
+        event.preventDefault();
+        if (action === "fire") this.fireHeld = false;
+      }, { passive: false });
+      button.addEventListener("mousedown", () => {
+        if (action === "fire") this.fireHeld = true;
+        this.items.push([action]);
+      });
+      button.addEventListener("mouseup", () => { if (action === "fire") this.fireHeld = false; });
     });
   }
 
   movement() {
-    const x = (this.keys.has("KeyD") ? 1 : 0) - (this.keys.has("KeyA") ? 1 : 0) + this.touchMove.x;
-    const y = (this.keys.has("KeyS") ? 1 : 0) - (this.keys.has("KeyW") ? 1 : 0) + this.touchMove.y;
+    const x = (this.keys.has("KeyD") ? 1 : 0) - (this.keys.has("KeyA") ? 1 : 0) + this.touchMovement.x;
+    const y = (this.keys.has("KeyS") ? 1 : 0) - (this.keys.has("KeyW") ? 1 : 0) + this.touchMovement.y;
     const length = Math.hypot(x, y);
     return length > 1 ? { x: x / length, y: y / length } : { x, y };
   }
 
-  consume() { const items = this.queue.splice(0); const yaw = this.yaw; this.yaw = 0; return { items, yaw }; }
+  consume() {
+    const state = { yaw: this.yaw, items: this.items.splice(0) };
+    this.yaw = 0;
+    return state;
+  }
 }

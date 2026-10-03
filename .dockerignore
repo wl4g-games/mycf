@@ -1,0 +1,8 @@
+.git
+.github
+node_modules
+dist
+test
+assets/museum-arena.png
+.DS_Store
+*.log
