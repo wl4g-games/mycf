@@ -1,0 +1,23 @@
+[Unit]
+Description=Toon Strike WebSocket multiplayer service
+After=network.target
+
+[Service]
+Type=simple
+User=agent
+Group=agent
+WorkingDirectory=/home/agent/mycf
+Environment=NODE_ENV=production
+Environment=MYCF_WS_HOST=127.0.0.1
+Environment=MYCF_WS_PORT=8787
+ExecStart=/usr/bin/node /home/agent/mycf/server/index.js
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

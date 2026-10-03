@@ -3,104 +3,167 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-    <meta name="theme-color" content="#071014" />
-    <meta name="description" content="史前禁区：原创恐龙博物馆 4v4 H5 战术射击游戏" />
-    <title>史前禁区 · Museum Lockdown</title>
-    <link rel="stylesheet" href="styles.css" />
+    <meta name="theme-color" content="#143a57" />
+    <meta name="description" content="泡泡战区：支持单机和网络多人、两张卡通 3D 地图、三套背包及最高 16v16 的原创 H5 射击游戏" />
+    <title>泡泡战区 · Toon Strike</title>
+    <link rel="stylesheet" href="styles.css?v=20261003-v2" />
   </head>
   <body>
     <main id="game-shell">
       <canvas id="game" aria-label="游戏画面"></canvas>
 
-      <section id="landing" class="landing">
+      <section id="landing" class="landing map-city">
         <div class="landing-shade"></div>
-        <header class="brand"><span class="brand-mark">M</span><span>MUSEUM // LOCKDOWN</span></header>
+        <header class="brand"><span class="brand-mark">TS</span><span>TOON // STRIKE</span></header>
+
         <div class="landing-copy">
-          <p class="eyebrow">4V4 · TEAM DEATHMATCH · H5</p>
-          <h1>史前<br /><em>禁区</em></h1>
-          <p class="lead">午夜，恐龙博物馆。两支小队争夺中庭，<br class="desktop-only" />而装甲载具正停在南侧货运通道。</p>
-          <button id="start-button" class="primary-button">
-            <span>进入战区</span><kbd>ENTER</kbd>
-          </button>
-          <div class="feature-row">
-            <span>巴雷特</span><i></i><span>无限弹药</span><i></i><span>可驾驶坦克</span>
-          </div>
+          <p class="eyebrow">CARTOON 3D BROWSER COMBAT · H5</p>
+          <h1>泡泡<br /><em>战区</em></h1>
+          <p class="lead">在弯弯的泡泡港城或松果山谷展开欢乐交火。<br class="desktop-only" />选择小队规模与作战背包，驾驶卡通坦克冲破防线。</p>
+          <div class="feature-row"><span>2 张卡通地图</span><i></i><span>3 套背包</span><i></i><span>最高 16V16</span></div>
         </div>
-        <aside class="briefing">
-          <p>作战简报 <b>01</b></p>
-          <dl>
-            <div><dt>地点</dt><dd>自然历史馆 · 中庭</dd></div>
-            <div><dt>任务</dt><dd>率先取得 15 次击杀</dd></div>
-            <div><dt>编制</dt><dd>海豹 4 / 恐怖分子 4</dd></div>
-          </dl>
+
+        <aside class="setup-panel">
+          <div class="setup-head"><span>战区部署</span><b id="setup-code">TOON-CITY</b></div>
+
+          <section class="setup-group version-group">
+            <p><b>01</b> 选择作战版本</p>
+            <div class="version-options">
+              <button type="button" class="version-option" data-version="solo"><strong>单机版</strong><small>除你之外全部由 AI NPC 补位</small></button>
+              <button type="button" class="version-option" data-version="network"><strong>网络版</strong><small>真人房间 · 邀请 · AI 自动补位</small></button>
+            </div>
+          </section>
+
+          <div id="deployment-options" class="deployment-options is-locked" aria-disabled="true">
+            <section class="setup-group">
+              <p><b>02</b> 选择地图</p>
+              <div class="map-options">
+                <button type="button" class="map-option selected" data-map="city" style="--map-image:url('assets/toon-city.png')">
+                  <span>泡泡港城</span><small>欢乐海港都市战区</small><i>CITY</i>
+                </button>
+                <button type="button" class="map-option" data-map="wild" style="--map-image:url('assets/toon-wild.png')">
+                  <span>松果山谷</span><small>卡通野外行动区</small><i>WILDS</i>
+                </button>
+              </div>
+            </section>
+
+            <section class="setup-group compact">
+              <p><b>03</b> 对战规模</p>
+              <div class="mode-options">
+                <button type="button" class="mode-option selected" data-mode="4v4"><strong>4V4</strong><small>战术小队</small></button>
+                <button type="button" class="mode-option" data-mode="8v8"><strong>8V8</strong><small>中型交火</small></button>
+                <button type="button" class="mode-option" data-mode="16v16"><strong>16V16</strong><small>全面大战</small></button>
+              </div>
+            </section>
+
+            <section class="setup-group compact">
+              <p><b>04</b> 作战背包</p>
+              <div class="loadout-options">
+                <button type="button" class="loadout-option selected" data-loadout="recon"><b>01</b><span><strong>远程猎手</strong><small>巴雷特 · 白壳手枪 · 瑞士军刀 · 烟雾弹</small></span></button>
+                <button type="button" class="loadout-option" data-loadout="raider"><b>02</b><span><strong>突击破阵</strong><small>AK-47 · 白克手枪 · 战斧 · 烟花手雷</small></span></button>
+                <button type="button" class="loadout-option" data-loadout="police"><b>03</b><span><strong>警用火力</strong><small>低后坐力机枪 · 双枪 · 瑞士军刀 · 骷髅手雷</small></span></button>
+              </div>
+            </section>
+
+            <button type="button" id="start-button" class="primary-button" disabled><span>请先选择版本</span><kbd>ENTER</kbd></button>
+          </div>
+
+          <section id="network-lobby" class="network-lobby is-hidden" aria-live="polite">
+            <div class="lobby-identity"><span><i id="network-dot"></i><b id="network-alias">未连接</b></span><small id="network-status">等待注册</small></div>
+            <div id="network-no-room" class="network-no-room">
+              <p>创建房间后可邀请所有尚未加入其他房间的在线玩家。</p>
+              <button type="button" id="create-room-button" class="secondary-button">创建作战房间</button>
+            </div>
+            <div id="room-console" class="room-console is-hidden">
+              <header><span>房间 <b id="room-code">------</b></span><small id="room-capacity">1 / 8 真人</small></header>
+              <div id="room-members" class="room-members"></div>
+              <p class="lobby-label">可邀请玩家</p>
+              <div id="online-users" class="online-users"></div>
+              <div class="room-actions">
+                <button type="button" id="leave-room-button" class="ghost-button">离开房间</button>
+                <button type="button" id="start-room-button" class="secondary-button">开始比赛 · AI 补位</button>
+              </div>
+            </div>
+            <div id="invite-card" class="invite-card is-hidden">
+              <p id="invite-copy">收到房间邀请</p>
+              <div><button type="button" id="decline-invite">拒绝</button><button type="button" id="accept-invite">接受</button></div>
+            </div>
+          </section>
         </aside>
+
         <div class="controls-strip">
-          <span><kbd>WASD</kbd> 移动</span>
-          <span><kbd>鼠标</kbd> 瞄准</span>
-          <span><kbd>左键</kbd> 攻击</span>
-          <span><kbd>右键</kbd> 开镜</span>
-          <span><kbd>1/2/3</kbd> 切换武器</span>
-          <span><kbd>G</kbd> 手雷</span>
-          <span><kbd>F</kbd> 驾驶</span>
+          <span><kbd>WASD</kbd> 移动</span><span><kbd>鼠标</kbd> 瞄准</span><span><kbd>左键</kbd> 攻击</span>
+          <span><kbd>右键</kbd> 开镜</span><span><kbd>1/2/3</kbd> 主副近战</span><span><kbd>G</kbd> 投掷</span>
+          <span><kbd>B</kbd> 换背包</span><span><kbd>F</kbd> 驾驶坦克</span>
         </div>
       </section>
 
       <section id="hud" class="hud is-hidden" aria-live="polite">
         <div class="top-bar">
-          <div class="team-score seals"><span>SEALS</span><strong id="seal-score">00</strong></div>
-          <div class="mission-clock"><b id="clock">05:00</b><span>先到 15 分</span></div>
-          <div class="team-score tangos"><strong id="terror-score">00</strong><span>TANGOS</span></div>
+          <div class="team-score seals"><span>蓝队</span><strong id="seal-score">00</strong></div>
+          <div class="mission-clock"><b id="clock">08:00</b><span id="match-limit">先到 15 分 · 4V4</span></div>
+          <div class="team-score tangos"><strong id="terror-score">00</strong><span>红队</span></div>
         </div>
 
         <div class="status-panel">
-          <p id="location">恐龙中庭</p>
+          <p id="location">泡泡港城 · 南港高架</p>
           <div class="health-line"><span>生命</span><b id="health">100</b></div>
           <div class="health-track"><i id="health-fill"></i></div>
         </div>
 
         <div id="kill-feed" class="kill-feed"></div>
-        <div id="interaction" class="interaction is-hidden"><kbd>F</kbd><span>驾驶 M-77 主战坦克</span></div>
+        <div id="interaction" class="interaction is-hidden"><kbd>F</kbd><span>驾驶 M-77 泡泡坦克</span></div>
         <div id="announcement" class="announcement is-hidden"></div>
-
         <div id="crosshair" class="crosshair"><i></i><i></i><i></i><i></i><b></b></div>
         <div id="hit-marker" class="hit-marker">×</div>
         <div id="scope" class="scope"><div class="scope-ring"></div><i class="scope-h"></i><i class="scope-v"></i><span>8×</span></div>
         <div class="vignette"></div>
 
         <aside class="radar-wrap">
-          <div class="radar-head"><span>战术雷达</span><b id="alive-count">4 : 4</b></div>
-          <canvas id="radar" width="210" height="150"></canvas>
+          <div class="radar-head"><span id="radar-map">泡泡港城</span><b id="alive-count">4 : 4</b></div>
+          <canvas id="radar" width="240" height="168"></canvas>
         </aside>
 
         <aside class="weapon-panel">
-          <p id="weapon-slot">主武器 / 01</p>
+          <p><span id="weapon-slot">主武器 / 1</span><em id="backpack-name">背包 01 · 远程猎手</em></p>
           <div><strong id="weapon-name">BARRETT M82A1</strong><b id="ammo">∞</b></div>
-          <span id="weapon-mode">.50 BMG · 栓动狙击步枪</span>
+          <span id="weapon-mode">.50 BMG · 8×瞄准镜</span>
+          <small id="throwable-name">G · M18 烟雾弹</small>
         </aside>
 
         <div id="tank-hud" class="tank-hud is-hidden">
-          <span>装甲 <b id="tank-health">100</b></span>
-          <strong id="tank-speed">000</strong><small>KM/H</small>
-          <p>CHASE CAM · 主炮就绪</p>
+          <span>装甲 <b id="tank-health">100</b></span><strong id="tank-speed">000</strong><small>KM/H</small>
+          <p>独立炮塔 · 可移动射击 · 主炮无限</p>
         </div>
 
         <div id="mobile-controls" class="mobile-controls">
           <div id="move-pad" class="move-pad"><i id="move-stick"></i></div>
-          <button data-action="scope">镜</button>
-          <button data-action="grenade">雷</button>
-          <button data-action="interact">F</button>
-          <button data-action="fire" class="fire-button">开火</button>
+          <button type="button" data-action="scope">镜</button><button type="button" data-action="grenade">雷</button>
+          <button type="button" data-action="backpack">包</button><button type="button" data-action="interact">F</button>
+          <button type="button" data-action="fire" class="fire-button">开火</button>
         </div>
       </section>
 
       <section id="modal" class="modal is-hidden">
-        <p id="modal-kicker">行动暂停</p>
-        <h2 id="modal-title">重新部署</h2>
-        <p id="modal-copy">点击继续并重新锁定鼠标</p>
-        <button id="resume-button" class="primary-button"><span>继续行动</span><kbd>ENTER</kbd></button>
+        <p id="modal-kicker">行动暂停</p><h2 id="modal-title">重新部署</h2><p id="modal-copy">点击继续并重新锁定鼠标</p>
+        <button type="button" id="resume-button" class="primary-button"><span>继续行动</span><kbd>ENTER</kbd></button>
+      </section>
+
+      <section id="alias-modal" class="modal alias-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="alias-title">
+        <p>网络身份注册</p><h2 id="alias-title">输入作战别名</h2>
+        <p>确认后将自动连接同域 WebSocket 服务，别名在本次在线期间唯一。</p>
+        <input id="alias-input" type="text" maxlength="16" autocomplete="nickname" placeholder="2–16 个字符" />
+        <small id="alias-error" class="form-error"></small>
+        <div class="modal-actions"><button type="button" id="alias-cancel" class="ghost-button">返回</button><button type="button" id="alias-confirm" class="primary-button"><span>确认并连接</span></button></div>
+      </section>
+
+      <section id="ranking-modal" class="ranking-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="ranking-title">
+        <header><p>战局结算</p><h2 id="ranking-title">比赛排名</h2><strong id="ranking-result">蓝队胜利</strong></header>
+        <div class="ranking-score"><span>蓝队 <b id="ranking-seal-score">00</b></span><i>FINAL</i><span><b id="ranking-terror-score">00</b> 红队</span></div>
+        <div class="ranking-table-wrap"><table><thead><tr><th>#</th><th>玩家</th><th>阵营</th><th>击杀</th><th>阵亡</th><th>K/D</th><th>伤害</th><th>积分</th></tr></thead><tbody id="ranking-body"></tbody></table></div>
+        <button type="button" id="ranking-close" class="primary-button"><span>返回房间</span></button>
       </section>
     </main>
-
-    <script type="module" src="src/main.js"></script>
+    <script type="module" src="src/main.js?v=20261003-v2"></script>
   </body>
 </html>

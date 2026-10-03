@@ -1,41 +1,63 @@
 import {
   BOT_NAMES, GAME_MODES, LOADOUTS, MAPS, MATCH_TIME, TEAM, THROWABLES, WEAPONS,
   clamp, distance, isSolid, normalizeAngle, spawnCells,
-} from "./config.js?v=20261003-v2";
+} from "../src/config.js";
 
 const TEAMS = [TEAM.SEAL, TEAM.TERROR];
 const randomItem = list => list[Math.floor(Math.random() * list.length)];
 
-export class GameState {
-  constructor(audio, emit = () => {}) {
-    this.audio = audio;
+function publicProjectile(projectile) {
+  return {
+    type: projectile.type,
+    throwableId: projectile.throwableId,
+    x: projectile.x,
+    y: projectile.y,
+    z: projectile.z,
+  };
+}
+
+function publicActor(actor, ownActor) {
+  return {
+    id: actor.id,
+    userId: actor.userId,
+    isBot: actor.isBot,
+    isPlayer: Boolean(ownActor && actor.id === ownActor.id),
+    name: actor.name,
+    team: actor.team,
+    index: actor.index,
+    x: actor.x,
+    y: actor.y,
+    angle: actor.angle,
+    health: actor.health,
+    alive: actor.alive,
+    respawn: actor.respawn,
+    kills: actor.kills,
+    deaths: actor.deaths,
+    damage: actor.damage,
+    loadoutId: actor.loadoutId,
+    weaponSlot: actor.weaponSlot,
+    weaponId: actor.weaponId,
+    throwableId: actor.throwableId,
+    scoped: actor.scoped,
+  };
+}
+
+export class AuthoritativeMatch {
+  constructor(room, members, emit, finish) {
+    this.roomId = room.id;
+    this.map = MAPS[room.mapId] || MAPS.city;
+    this.mode = GAME_MODES[room.modeId] || GAME_MODES["4v4"];
     this.emit = emit;
-    this.settings = { mapId: "city", modeId: "4v4", loadoutId: "recon" };
-    this.round = 0;
-    this.reset();
-  }
-
-  configure(settings = {}) {
-    this.settings = { ...this.settings, ...settings };
-    this.reset();
-  }
-
-  reset() {
-    this.round += 1;
-    this.map = MAPS[this.settings.mapId] || MAPS.city;
-    this.mode = GAME_MODES[this.settings.modeId] || GAME_MODES["4v4"];
+    this.onFinish = finish;
     this.time = MATCH_TIME;
-    this.score = { [TEAM.SEAL]: 0, [TEAM.TERROR]: 0 };
-    this.finished = false;
-    this.started = false;
-    this.hitMarker = 0;
-    this.shake = 0;
-    this.flash = 0;
+    this.score = { seal: 0, terror: 0 };
+    this.actors = [];
     this.projectiles = [];
     this.effects = [];
     this.feed = [];
-    this.actors = [];
-    this.createTeams();
+    this.inputs = new Map();
+    this.actorByUser = new Map();
+    this.finished = false;
     this.tank = {
       ...this.map.tank,
       turretAngle: this.map.tank.angle,
@@ -45,20 +67,21 @@ export class GameState {
       speed: 0,
       cooldown: 0,
     };
+    this.createActors(members);
   }
 
-  createTeams() {
+  createActors(members) {
     for (const team of TEAMS) {
       const cells = spawnCells(this.map, team);
       for (let index = 0; index < this.mode.teamSize; index += 1) {
         const [x, y] = cells[(index * 7) % cells.length];
-        const player = team === TEAM.SEAL && index === 0;
-        const loadout = player
-          ? LOADOUTS[this.settings.loadoutId] || LOADOUTS.recon
-          : team === TEAM.SEAL ? LOADOUTS.police : LOADOUTS.raider;
+        const rawName = BOT_NAMES[team][index] || `${team.toUpperCase()}-${index + 1}`;
+        const loadout = team === TEAM.SEAL ? LOADOUTS.police : LOADOUTS.raider;
         this.actors.push({
           id: `${team}-${index}`,
-          name: BOT_NAMES[team][index] || `${team.toUpperCase()}-${index + 1}`,
+          userId: null,
+          isBot: true,
+          name: rawName === "你" ? "RANGER" : rawName,
           team,
           index,
           x: x + .5,
@@ -73,8 +96,6 @@ export class GameState {
           avoidTimer: 0,
           avoidAngle: 0,
           routeIndex: 0,
-          isPlayer: player,
-          isBot: !player,
           kills: 0,
           deaths: 0,
           damage: 0,
@@ -86,24 +107,68 @@ export class GameState {
         });
       }
     }
-    this.player = this.actors.find(actor => actor.isPlayer);
+
+    members.forEach((member, memberIndex) => {
+      const team = TEAMS[memberIndex % TEAMS.length];
+      const actorIndex = Math.floor(memberIndex / TEAMS.length);
+      const actor = this.actors.find(item => item.team === team && item.index === actorIndex);
+      if (!actor) return;
+      const loadout = LOADOUTS[member.loadoutId] || LOADOUTS.recon;
+      Object.assign(actor, {
+        userId: member.id,
+        isBot: false,
+        name: member.alias,
+        loadoutId: loadout.id,
+        weaponSlot: "primary",
+        weaponId: loadout.primary,
+        throwableId: loadout.throwable,
+      });
+      this.actorByUser.set(member.id, actor);
+      this.inputs.set(member.id, this.emptyInput(actor.angle));
+    });
   }
 
-  start() { this.started = true; }
+  emptyInput(angle = 0) {
+    return { movement: { x: 0, y: 0 }, angle, fireHeld: false, actions: [] };
+  }
 
-  update(dt, input) {
-    if (!this.started || this.finished) return;
-    dt = Math.min(dt, .05);
+  assignmentFor(userId) {
+    const actor = this.actorByUser.get(userId);
+    return actor ? { actorId: actor.id, team: actor.team } : null;
+  }
+
+  setInput(userId, payload = {}) {
+    const actor = this.actorByUser.get(userId);
+    if (!actor || this.finished) return;
+    const movement = payload.movement || {};
+    const input = this.inputs.get(userId) || this.emptyInput(actor.angle);
+    input.movement = {
+      x: clamp(Number(movement.x) || 0, -1, 1),
+      y: clamp(Number(movement.y) || 0, -1, 1),
+    };
+    if (Number.isFinite(payload.angle)) input.angle = normalizeAngle(payload.angle);
+    input.fireHeld = Boolean(payload.fireHeld);
+    if (Array.isArray(payload.actions)) {
+      input.actions.push(...payload.actions.slice(0, 8).filter(action => Array.isArray(action) && typeof action[0] === "string"));
+      input.actions = input.actions.slice(-12);
+    }
+    this.inputs.set(userId, input);
+  }
+
+  update(dt) {
+    if (this.finished) return;
+    dt = Math.min(.05, Math.max(.001, dt));
     this.time = Math.max(0, this.time - dt);
-    this.hitMarker = Math.max(0, this.hitMarker - dt);
-    this.shake = Math.max(0, this.shake - dt * 3);
-    this.flash = Math.max(0, this.flash - dt * 3);
     this.tank.cooldown = Math.max(0, this.tank.cooldown - dt);
-    this.player.angle = normalizeAngle(this.player.angle + input.yaw);
-    if (this.tank.driverId === this.player.id) this.tank.turretAngle = this.player.angle;
-
-    for (const action of input.items) this.handleAction(action);
-    if (this.player.alive) this.updatePlayer(dt, input.movement, input.fireHeld);
+    for (const [userId, actor] of this.actorByUser) {
+      if (!actor.alive) continue;
+      const input = this.inputs.get(userId) || this.emptyInput(actor.angle);
+      actor.cooldown = Math.max(0, actor.cooldown - dt);
+      actor.angle = input.angle;
+      if (this.tank.driverId === actor.id) this.tank.turretAngle = actor.angle;
+      for (const action of input.actions.splice(0)) this.handleAction(actor, action);
+      this.updateHuman(actor, dt, input);
+    }
     this.updateBots(dt);
     this.updateProjectiles(dt);
     this.updateRespawns(dt);
@@ -112,17 +177,36 @@ export class GameState {
     if (this.time <= 0) this.finish(this.score.seal >= this.score.terror ? TEAM.SEAL : TEAM.TERROR);
   }
 
-  handleAction([type, value]) {
-    if (!this.player.alive) return;
-    if (type === "weaponSlot" && this.tank.driverId !== this.player.id) this.selectSlot(this.player, value);
-    if (type === "backpack" && this.tank.driverId !== this.player.id) this.cycleLoadout(this.player);
-    if (type === "scope" && this.player.weaponId === "barrett" && this.tank.driverId !== this.player.id) {
-      this.player.scoped = !this.player.scoped;
-      this.audio.select();
+  updateHuman(actor, dt, input) {
+    if (this.tank.driverId === actor.id) {
+      const drive = -input.movement.y;
+      const steer = input.movement.x;
+      this.tank.speed += (drive * 4.2 - this.tank.speed * 1.8) * dt;
+      this.tank.speed = clamp(this.tank.speed, -1.6, 3.2);
+      this.tank.angle = normalizeAngle(this.tank.angle + steer * dt * (1.15 + Math.abs(this.tank.speed) * .22));
+      this.moveEntity(this.tank, Math.cos(this.tank.angle) * this.tank.speed * dt, Math.sin(this.tank.angle) * this.tank.speed * dt, .62);
+      actor.x = this.tank.x;
+      actor.y = this.tank.y;
+      if (input.fireHeld) this.fireTank(actor);
+      return;
     }
-    if (type === "grenade" && this.tank.driverId !== this.player.id) this.throwGrenade(this.player);
-    if (type === "interact") this.toggleTank(this.player);
-    if (type === "fire") this.tank.driverId === this.player.id ? this.fireTank(this.player) : this.attack(this.player);
+    const speed = actor.scoped ? 1.35 : 3.1;
+    const forward = -input.movement.y;
+    const strafe = input.movement.x;
+    const dx = (Math.cos(actor.angle) * forward + Math.cos(actor.angle + Math.PI / 2) * strafe) * speed * dt;
+    const dy = (Math.sin(actor.angle) * forward + Math.sin(actor.angle + Math.PI / 2) * strafe) * speed * dt;
+    this.moveEntity(actor, dx, dy, .24);
+    const weapon = WEAPONS[actor.weaponId];
+    if (input.fireHeld && weapon?.automatic) this.attack(actor);
+  }
+
+  handleAction(actor, [type, value]) {
+    if (type === "weaponSlot" && this.tank.driverId !== actor.id) this.selectSlot(actor, value);
+    if (type === "backpack" && this.tank.driverId !== actor.id) this.cycleLoadout(actor);
+    if (type === "scope" && actor.weaponId === "barrett" && this.tank.driverId !== actor.id) actor.scoped = !actor.scoped;
+    if (type === "grenade" && this.tank.driverId !== actor.id) this.throwGrenade(actor);
+    if (type === "interact") this.toggleTank(actor);
+    if (type === "fire") this.tank.driverId === actor.id ? this.fireTank(actor) : this.attack(actor);
   }
 
   selectSlot(actor, slot) {
@@ -132,7 +216,6 @@ export class GameState {
     actor.weaponSlot = slot;
     actor.weaponId = weaponId;
     actor.scoped = false;
-    if (actor.isPlayer) this.audio.select();
   }
 
   cycleLoadout(actor) {
@@ -143,46 +226,13 @@ export class GameState {
     actor.weaponId = loadout.primary;
     actor.throwableId = loadout.throwable;
     actor.scoped = false;
-    if (actor.isPlayer) {
-      this.audio.select();
-      this.emit("announce", `已切换背包 ${loadout.number} · ${loadout.name}`);
-    }
-  }
-
-  updatePlayer(dt, movement, fireHeld) {
-    this.player.cooldown = Math.max(0, this.player.cooldown - dt);
-    if (this.tank.driverId === this.player.id) {
-      const drive = -movement.y;
-      const steer = movement.x;
-      this.tank.speed += (drive * 4.2 - this.tank.speed * 1.8) * dt;
-      this.tank.speed = clamp(this.tank.speed, -1.6, 3.2);
-      this.tank.angle = normalizeAngle(this.tank.angle + steer * dt * (1.15 + Math.abs(this.tank.speed) * .22));
-      this.moveEntity(this.tank, Math.cos(this.tank.angle) * this.tank.speed * dt, Math.sin(this.tank.angle) * this.tank.speed * dt, .62);
-      this.player.x = this.tank.x;
-      this.player.y = this.tank.y;
-      if (fireHeld) this.fireTank(this.player);
-      return;
-    }
-
-    const speed = this.player.scoped ? 1.35 : 3.1;
-    const forward = -movement.y;
-    const strafe = movement.x;
-    const dx = (Math.cos(this.player.angle) * forward + Math.cos(this.player.angle + Math.PI / 2) * strafe) * speed * dt;
-    const dy = (Math.sin(this.player.angle) * forward + Math.sin(this.player.angle + Math.PI / 2) * strafe) * speed * dt;
-    this.moveEntity(this.player, dx, dy, .24);
-    const weapon = this.currentWeapon;
-    if (fireHeld && weapon.automatic) this.attack(this.player);
   }
 
   attack(actor) {
     if (!actor.alive || actor.cooldown > 0) return;
     const weapon = WEAPONS[actor.weaponId] || WEAPONS.ak47;
     actor.cooldown = weapon.interval;
-    if (actor.isPlayer) {
-      if (weapon.visual === "knife" || weapon.visual === "axe") this.audio.knife(weapon.visual);
-      else this.audio.gunshot(weapon.visual);
-      this.shake = weapon.visual === "sniper" ? .48 : weapon.visual === "machinegun" ? .24 : .16;
-    }
+    this.emit({ type: "shot", actorId: actor.id, userId: actor.userId, profile: weapon.visual });
     const spread = actor.scoped && weapon.scopedSpread != null ? weapon.scopedSpread : weapon.spread;
     const victim = this.findTargetInArc(actor, weapon.range, spread);
     if (victim) this.damage(victim, weapon.damage, actor, weapon.name);
@@ -208,10 +258,9 @@ export class GameState {
   throwGrenade(actor) {
     if (actor.cooldown > 0) return;
     actor.cooldown = .62;
-    if (actor.isPlayer) this.audio.select();
     this.projectiles.push({
       type: "grenade",
-      throwableId: actor.throwableId,
+      throwableId: actor.throwableId || "firework",
       x: actor.x + Math.cos(actor.angle) * .45,
       y: actor.y + Math.sin(actor.angle) * .45,
       z: .65,
@@ -231,7 +280,6 @@ export class GameState {
       const side = this.tank.angle + Math.PI / 2;
       const exit = { x: this.tank.x + Math.cos(side) * 1.1, y: this.tank.y + Math.sin(side) * 1.1 };
       if (!this.collides(exit.x, exit.y, .24)) Object.assign(actor, exit);
-      if (actor.isPlayer) this.emit("announce", "已离开泡泡坦克");
       return;
     }
     if (!this.tank.driverId && this.tank.health > 0 && distance(actor, this.tank) < 1.65) {
@@ -240,17 +288,12 @@ export class GameState {
       actor.scoped = false;
       actor.x = this.tank.x;
       actor.y = this.tank.y;
-      if (actor.isPlayer) this.emit("announce", "M-77 泡泡坦克已启动");
     }
   }
 
   fireTank(actor) {
     if (this.tank.driverId !== actor.id || this.tank.cooldown > 0) return;
     this.tank.cooldown = .92;
-    if (actor.isPlayer) {
-      this.audio.tankShot();
-      this.shake = 1;
-    }
     this.projectiles.push({
       type: "shell",
       x: this.tank.x + Math.cos(this.tank.turretAngle),
@@ -263,6 +306,7 @@ export class GameState {
       owner: actor,
       team: actor.team,
     });
+    this.emit({ type: "tank_shot", actorId: actor.id, userId: actor.userId });
   }
 
   updateBots(dt) {
@@ -330,8 +374,7 @@ export class GameState {
     const power = projectile.type === "shell" ? 195 : throwable.damage;
     const type = projectile.type === "shell" ? "shell" : throwable.smoke ? "smoke" : throwable.firework ? "firework" : "skull";
     this.effects.push({ x: projectile.x, y: projectile.y, life: type === "smoke" ? 7 : .7, maxLife: type === "smoke" ? 7 : .7, radius, type });
-    this.audio.explosion(type);
-    this.shake = Math.max(this.shake, .78);
+    this.emit({ type: "explosion", explosionType: type, x: projectile.x, y: projectile.y });
     if (!power) return;
     for (const actor of this.actors) {
       if (!actor.alive || actor.team === projectile.team) continue;
@@ -344,7 +387,6 @@ export class GameState {
     if (!target.alive || !attacker || target.team === attacker.team) return;
     if (this.tank.driverId === target.id) {
       this.tank.health = Math.max(0, this.tank.health - amount * .62);
-      if (target.isPlayer) this.flash = .35;
       if (this.tank.health <= 0) {
         this.tank.driverId = null;
         this.tank.occupied = false;
@@ -355,8 +397,6 @@ export class GameState {
     }
     target.health -= amount;
     attacker.damage += amount;
-    if (target.isPlayer) this.flash = .34;
-    if (attacker.isPlayer) { this.hitMarker = .16; this.audio.hit(); }
     if (target.health <= 0) this.kill(target, attacker, weapon);
   }
 
@@ -371,11 +411,10 @@ export class GameState {
     const entry = { killer: attacker.name, killerTeam: attacker.team, victim: victim.name, victimTeam: victim.team, weapon, life: 5 };
     this.feed.unshift(entry);
     this.feed = this.feed.slice(0, 6);
-    this.emit("kill", entry);
-    if (victim.isPlayer) {
+    this.emit({ type: "kill", attackerUserId: attacker.userId, victimUserId: victim.userId, ...entry });
+    if (this.tank.driverId === victim.id) {
       this.tank.driverId = null;
       this.tank.occupied = false;
-      this.emit("death", { respawn: victim.respawn });
     }
     if (this.score[attacker.team] >= this.mode.scoreLimit) this.finish(attacker.team);
   }
@@ -397,13 +436,6 @@ export class GameState {
     actor.cooldown = .6;
     actor.angle = actor.team === TEAM.SEAL ? -Math.PI / 2 : Math.PI / 2;
     actor.routeIndex = 0;
-    if (actor.isPlayer) this.emit("respawn");
-  }
-
-  finish(winner) {
-    if (this.finished) return;
-    this.finished = true;
-    this.emit("finish", { winner, score: { ...this.score } });
   }
 
   moveEntity(entity, dx, dy, radius) {
@@ -443,14 +475,55 @@ export class GameState {
     return true;
   }
 
-  get nearTank() { return !this.tank.occupied && this.tank.health > 0 && distance(this.player, this.tank) < 1.65; }
-  get currentLoadout() { return LOADOUTS[this.player.loadoutId] || LOADOUTS.recon; }
-  get currentWeapon() { return WEAPONS[this.player.weaponId] || WEAPONS.ak47; }
-  get currentThrowable() { return THROWABLES[this.player.throwableId] || THROWABLES.firework; }
-  get aliveCounts() {
+  removeHuman(userId) {
+    const actor = this.actorByUser.get(userId);
+    if (!actor) return;
+    if (this.tank.driverId === actor.id) {
+      this.tank.driverId = null;
+      this.tank.occupied = false;
+    }
+    actor.userId = null;
+    actor.isBot = true;
+    actor.name = `${actor.name} AI`;
+    this.actorByUser.delete(userId);
+    this.inputs.delete(userId);
+  }
+
+  finish(winner) {
+    if (this.finished) return;
+    this.finished = true;
+    const rankings = this.actors
+      .map(actor => ({
+        userId: actor.userId,
+        name: actor.name,
+        team: actor.team,
+        isBot: actor.isBot,
+        kills: actor.kills,
+        deaths: actor.deaths,
+        kd: actor.kills / Math.max(1, actor.deaths),
+        damage: Math.round(actor.damage),
+        points: actor.kills * 100 + Math.round(actor.damage) - actor.deaths * 10,
+        result: actor.team === winner ? "win" : "loss",
+      }))
+      .sort((a, b) => b.points - a.points || b.kills - a.kills || a.deaths - b.deaths)
+      .map((entry, index) => ({ ...entry, rank: index + 1 }));
+    this.onFinish({ winner, score: { ...this.score }, rankings });
+  }
+
+  snapshotFor(userId) {
+    const ownActor = this.actorByUser.get(userId);
     return {
-      seal: this.actors.filter(actor => actor.team === TEAM.SEAL && actor.alive).length,
-      terror: this.actors.filter(actor => actor.team === TEAM.TERROR && actor.alive).length,
+      mapId: this.map.id,
+      modeId: this.mode.id,
+      playerId: ownActor?.id || null,
+      time: this.time,
+      score: { ...this.score },
+      finished: this.finished,
+      actors: this.actors.map(actor => publicActor(actor, ownActor)),
+      tank: { ...this.tank },
+      projectiles: this.projectiles.map(publicProjectile),
+      effects: this.effects.map(effect => ({ ...effect })),
+      feed: this.feed.map(entry => ({ ...entry })),
     };
   }
 }
