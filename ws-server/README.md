@@ -39,7 +39,7 @@ npx vercel --cwd ws-server --env PORT=8080
 
 The service exposes `/health` and `/ws`. Vercel container Functions remain stateless and a connection is pinned only for its lifetime. New or reconnected clients can reach different instances, so reliable public multiplayer still requires resumable sessions plus external durable room, match, presence, and pub/sub state.
 
-Each match has a 290-second time limit and may finish earlier at its score limit. A WebSocket closes when its Vercel Function reaches the plan's maximum duration; registration and lobby time occur before match start and consume connection lifetime too.
+Match conditions pair `10/20/30/50` kills with `180/300/480/720` seconds and may finish earlier at the kill target. A WebSocket closes when its Vercel Function reaches the plan's maximum duration; registration and lobby time occur before match start and consume connection lifetime too. Fluid compute defaults to 300 seconds, Hobby cannot exceed 300 seconds, and paid deployments must explicitly allow at least 800 seconds for the longer presets. Durable shared state and resumable clients remain necessary even with a longer limit.
 
 ## Merge deployment controls
 

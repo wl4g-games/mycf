@@ -1,4 +1,4 @@
-const FIREARM_PROFILES = new Set(["sniper", "pistol", "rifle", "machinegun", "dual"]);
+const TRAJECTORY_PROFILES = new Set(["sniper", "pistol", "rifle", "machinegun", "dual", "bow"]);
 const DEFAULT_LIFETIME = .16;
 const MAX_TRACERS = 96;
 
@@ -7,7 +7,7 @@ function finitePoint(point) {
 }
 
 export function createCombatTracer(event, localPlayerId, lifetime = DEFAULT_LIFETIME) {
-  if (!event || event.type !== "shot" || !FIREARM_PROFILES.has(event.profile)) return null;
+  if (!event || event.type !== "shot" || !TRAJECTORY_PROFILES.has(event.profile)) return null;
   if (!finitePoint(event.from) || !finitePoint(event.to)) return null;
   const duration = Math.max(.04, Number(lifetime) || DEFAULT_LIFETIME);
   return {

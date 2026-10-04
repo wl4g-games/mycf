@@ -26,7 +26,10 @@ test("accepted firearm events create a deterministic incoming injury tracer", ()
   assert.notStrictEqual(tracer.from, incomingHit.from);
 });
 
-test("melee and incomplete events never create fake bullet beams", () => {
+test("bows create arrow trails while melee and incomplete events create no trajectory", () => {
+  const arrow = createCombatTracer({ ...incomingHit, weaponId: "powerBow", profile: "bow" }, "seal-0");
+  assert.equal(arrow.profile, "bow");
+  assert.equal(arrow.weaponId, "powerBow");
   assert.equal(createCombatTracer({ ...incomingHit, profile: "knife" }, "seal-0"), null);
   assert.equal(createCombatTracer({ ...incomingHit, from: null }, "seal-0"), null);
   assert.equal(createCombatTracer(null, "seal-0"), null);

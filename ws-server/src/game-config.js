@@ -1,7 +1,118 @@
+import { DEFAULT_TIME_LIMIT } from "./match-rules.js";
+
 export const TEAM = Object.freeze({ SEAL: "seal", TERROR: "terror" });
-export const MATCH_TIME = 290;
+export { DEFAULT_CONDITION_ID, DEFAULT_TIME_LIMIT, MATCH_CONDITIONS, MATCH_CONDITION_IDS, resolveMatchCondition } from "./match-rules.js";
+export { createMatchResult, alliedPodium, summarizeActorStats } from "./match-results.js";
+export const MATCH_TIME = DEFAULT_TIME_LIMIT;
 export const FOV = Math.PI / 2.75;
 export const SCOPED_FOV = Math.PI / 12;
+
+export const DEFAULT_CHARACTER_ID = "maleAgent";
+export const CHARACTER_PROFILES = Object.freeze({
+  maleAgent: Object.freeze({
+    id: "maleAgent",
+    nameKey: "character.maleAgent.name",
+    scale: 1,
+    torsoWidth: .6,
+    headScale: 1,
+    shoulderScale: 1,
+    helmet: "cap",
+    accent: "#57d2ff",
+    skinTone: "#d99a6c",
+    hairColor: "#2a2530",
+  }),
+  glamSoldierBlack: Object.freeze({
+    id: "glamSoldierBlack",
+    nameKey: "character.glamSoldierBlack.name",
+    scale: .99,
+    torsoWidth: .56,
+    headScale: .98,
+    shoulderScale: .95,
+    helmet: "tactical",
+    accent: "#ff72ac",
+    skinTone: "#8c5a43",
+    hairColor: "#211d27",
+  }),
+  qipaoSoldier: Object.freeze({
+    id: "qipaoSoldier",
+    nameKey: "character.qipaoSoldier.name",
+    scale: .98,
+    torsoWidth: .55,
+    headScale: .99,
+    shoulderScale: .94,
+    helmet: "tactical",
+    accent: "#79e6ff",
+    skinTone: "#efb58b",
+    hairColor: "#b98557",
+  }),
+  glamAgentBlack: Object.freeze({
+    id: "glamAgentBlack",
+    nameKey: "character.glamAgentBlack.name",
+    scale: .97,
+    torsoWidth: .52,
+    headScale: .97,
+    shoulderScale: .9,
+    helmet: "visor",
+    accent: "#ff75d1",
+    skinTone: "#7f503d",
+    hairColor: "#1d1922",
+  }),
+  qipaoAgent: Object.freeze({
+    id: "qipaoAgent",
+    nameKey: "character.qipaoAgent.name",
+    scale: .96,
+    torsoWidth: .51,
+    headScale: .98,
+    shoulderScale: .89,
+    helmet: "visor",
+    accent: "#a992ff",
+    skinTone: "#f2bc94",
+    hairColor: "#744d3e",
+  }),
+  cuteSoldier: Object.freeze({
+    id: "cuteSoldier",
+    nameKey: "character.cuteSoldier.name",
+    scale: .95,
+    torsoWidth: .57,
+    headScale: 1.06,
+    shoulderScale: .93,
+    helmet: "round",
+    accent: "#ffd75a",
+    skinTone: "#edac82",
+    hairColor: "#473044",
+  }),
+  specialForces: Object.freeze({
+    id: "specialForces",
+    nameKey: "character.specialForces.name",
+    scale: 1.06,
+    torsoWidth: .68,
+    headScale: 1.02,
+    shoulderScale: 1.16,
+    helmet: "tactical",
+    accent: "#7af0a3",
+    skinTone: "#b87d59",
+    hairColor: "#20252b",
+  }),
+});
+export const CHARACTER_IDS = Object.freeze(Object.keys(CHARACTER_PROFILES));
+const CHARACTER_ALIASES = Object.freeze({
+  glamAgent: "glamAgentBlack",
+  glamSoldierWhite: "qipaoSoldier",
+  glamAgentWhite: "qipaoAgent",
+});
+const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
+
+export function resolveCharacterId(characterId) {
+  const resolved = hasOwn(CHARACTER_ALIASES, characterId) ? CHARACTER_ALIASES[characterId] : characterId;
+  return hasOwn(CHARACTER_PROFILES, resolved) ? resolved : DEFAULT_CHARACTER_ID;
+}
+
+export function botCharacterId(team, index) {
+  const offset = team === TEAM.TERROR ? 2 : 0;
+  const numericIndex = Number(index);
+  const safeIndex = Number.isFinite(numericIndex) ? Math.max(0, Math.floor(numericIndex)) : 0;
+  return CHARACTER_IDS[(safeIndex + offset) % CHARACTER_IDS.length];
+}
 
 function createGrid(width, height, rectangles, points = []) {
   const rows = Array.from({ length: height }, (_, y) => Array.from({ length: width }, (_, x) => (
@@ -34,6 +145,65 @@ const wildGrid = createGrid(36, 26, [
   [30, 12, "T"], [8, 16, "T"], [18, 17, "T"], [27, 18, "T"], [4, 21, "T"],
 ]);
 
+const cityVehicles = Object.freeze([
+  Object.freeze({ id: "city-tank", type: "tank", x: 18.5, y: 21.5, angle: -Math.PI / 2 }),
+  Object.freeze({ id: "city-armored-car", type: "armoredCar", x: 23.5, y: 9.5, angle: Math.PI / 2 }),
+]);
+
+const wildVehicles = Object.freeze([
+  Object.freeze({ id: "wild-tank", type: "tank", x: 18.5, y: 16.5, angle: -Math.PI / 2 }),
+  Object.freeze({ id: "wild-armored-car", type: "armoredCar", x: 25.5, y: 9.5, angle: Math.PI / 2 }),
+]);
+
+export const VEHICLE_TYPES = Object.freeze({
+  tank: Object.freeze({
+    id: "tank",
+    nameKey: "vehicle.tank.name",
+    interactKey: "hud.interactTank",
+    exitKey: "hud.exitTank",
+    hudDetailKey: "hud.tankDetail",
+    hudSlotKey: "hud.weapon.vehicleTank",
+    radius: .62,
+    interactionRange: 1.95,
+    maxHealth: 100,
+    armorScale: .62,
+    acceleration: 4.2,
+    drag: 1.8,
+    reverseSpeed: 1.6,
+    maxSpeed: 3.2,
+    steering: 1.15,
+    speedSteering: .22,
+    weapon: Object.freeze({
+      id: "tankCannon", kind: "shell", interval: .92, projectileSpeed: 13,
+      projectileLife: 3.2, muzzleOffset: 1, damage: 195, blastRadius: 4.5,
+      nameKey: "weapon.tankCannon.name", modeKey: "hud.weapon.tankMode", ammoKey: "hud.weapon.tankAmmo",
+    }),
+  }),
+  armoredCar: Object.freeze({
+    id: "armoredCar",
+    nameKey: "vehicle.armoredCar.name",
+    interactKey: "hud.interactArmoredCar",
+    exitKey: "hud.exitArmoredCar",
+    hudDetailKey: "hud.armoredCarDetail",
+    hudSlotKey: "hud.weapon.vehicleArmoredCar",
+    radius: .48,
+    interactionRange: 1.75,
+    maxHealth: 76,
+    armorScale: .78,
+    acceleration: 6.2,
+    drag: 2.1,
+    reverseSpeed: 2.2,
+    maxSpeed: 4.8,
+    steering: 1.68,
+    speedSteering: .16,
+    weapon: Object.freeze({
+      id: "armoredMG", kind: "hitscan", visual: "machinegun", interval: .11,
+      damage: 25, range: 24, spread: .06, automatic: true,
+      nameKey: "weapon.armoredMG.name", modeKey: "hud.weapon.armoredMode", ammoKey: "hud.weapon.armoredAmmo",
+    }),
+  }),
+});
+
 export const MAPS = Object.freeze({
   city: {
     id: "city",
@@ -43,7 +213,9 @@ export const MAPS = Object.freeze({
     theme: "city",
     grid: cityGrid,
     spawnAnchor: { seal: [17, 23], terror: [23, 2] },
-    tank: { x: 18.5, y: 21.5, angle: -Math.PI / 2 },
+    vehicles: cityVehicles,
+    tank: cityVehicles[0],
+    armoredCar: cityVehicles[1],
     locationKeys: ["map.city.location.0", "map.city.location.1", "map.city.location.2", "map.city.location.3"],
     routes: {
       seal: [[6, 23], [15, 22], [18, 17], [23, 10], [31, 9], [33, 3]],
@@ -58,7 +230,9 @@ export const MAPS = Object.freeze({
     theme: "wild",
     grid: wildGrid,
     spawnAnchor: { seal: [17, 23], terror: [22, 2] },
-    tank: { x: 18.5, y: 16.5, angle: -Math.PI / 2 },
+    vehicles: wildVehicles,
+    tank: wildVehicles[0],
+    armoredCar: wildVehicles[1],
     locationKeys: ["map.wild.location.0", "map.wild.location.1", "map.wild.location.2", "map.wild.location.3"],
     routes: {
       seal: [[5, 23], [15, 21], [18, 16], [23, 10], [30, 9], [33, 3]],
@@ -68,10 +242,10 @@ export const MAPS = Object.freeze({
 });
 
 export const GAME_MODES = Object.freeze({
-  "1v1": { id: "1v1", label: "1 VS 1", teamSize: 1, scoreLimit: 10 },
-  "4v4": { id: "4v4", label: "4 VS 4", teamSize: 4, scoreLimit: 15 },
-  "8v8": { id: "8v8", label: "8 VS 8", teamSize: 8, scoreLimit: 30 },
-  "16v16": { id: "16v16", label: "16 VS 16", teamSize: 16, scoreLimit: 50 },
+  "1v1": { id: "1v1", label: "1 VS 1", teamSize: 1 },
+  "4v4": { id: "4v4", label: "4 VS 4", teamSize: 4 },
+  "8v8": { id: "8v8", label: "8 VS 8", teamSize: 8 },
+  "16v16": { id: "16v16", label: "16 VS 16", teamSize: 16 },
 });
 
 export const WEAPONS = Object.freeze({
@@ -81,6 +255,9 @@ export const WEAPONS = Object.freeze({
   baike: { id: "baike", nameKey: "weapon.baike.name", detailKey: "weapon.baike.detail", visual: "pistol", damage: 46, range: 18, interval: .25, spread: .065, automatic: false },
   policeMG: { id: "policeMG", nameKey: "weapon.policeMG.name", detailKey: "weapon.policeMG.detail", visual: "machinegun", damage: 39, range: 25, interval: .095, spread: .065, automatic: true },
   dualPistols: { id: "dualPistols", nameKey: "weapon.dualPistols.name", detailKey: "weapon.dualPistols.detail", visual: "dual", damage: 29, range: 16, interval: .14, spread: .1, automatic: true },
+  powerBow: { id: "powerBow", nameKey: "weapon.powerBow.name", detailKey: "weapon.powerBow.detail", visual: "bow", damage: 108, range: 28, interval: .78, spread: .045, automatic: false },
+  desertEagle: { id: "desertEagle", nameKey: "weapon.desertEagle.name", detailKey: "weapon.desertEagle.detail", visual: "pistol", damage: 64, range: 20, interval: .38, spread: .065, automatic: false },
+  dualBlades: { id: "dualBlades", nameKey: "weapon.dualBlades.name", detailKey: "weapon.dualBlades.detail", visual: "knife", damage: 86, range: 1.78, interval: .46, spread: .82, automatic: false },
   swiss: { id: "swiss", nameKey: "weapon.swiss.name", detailKey: "weapon.swiss.detail", visual: "knife", damage: 72, range: 1.65, interval: .52, spread: .82, automatic: false },
   axe: { id: "axe", nameKey: "weapon.axe.name", detailKey: "weapon.axe.detail", visual: "axe", damage: 92, range: 1.72, interval: .72, spread: .76, automatic: false },
 });
@@ -95,6 +272,7 @@ export const LOADOUTS = Object.freeze({
   recon: { id: "recon", number: "01", nameKey: "loadout.recon.name", primary: "barrett", secondary: "whitePistol", melee: "swiss", throwable: "smoke" },
   raider: { id: "raider", number: "02", nameKey: "loadout.raider.name", primary: "ak47", secondary: "baike", melee: "axe", throwable: "firework" },
   police: { id: "police", number: "03", nameKey: "loadout.police.name", primary: "policeMG", secondary: "dualPistols", melee: "swiss", throwable: "skull" },
+  archer: { id: "archer", number: "04", nameKey: "loadout.archer.name", primary: "powerBow", secondary: "desertEagle", melee: "dualBlades", throwable: "smoke" },
 });
 
 export const BOT_NAMES = Object.freeze({

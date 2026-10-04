@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { GAME_MODES, LOADOUTS, MAPS, MATCH_TIME } from "./game-config.js";
+import { DEFAULT_CHARACTER_ID, GAME_MODES, LOADOUTS, MAPS, resolveCharacterId, resolveMatchCondition } from "./game-config.js";
 import { AuthoritativeMatch } from "./match.js";
 
 const ALIAS_PATTERN = /^[\p{L}\p{N}_\-\s]{2,16}$/u;
@@ -25,6 +25,7 @@ export class LobbyService {
       alias: null,
       roomId: null,
       loadoutId: "recon",
+      characterId: DEFAULT_CHARACTER_ID,
       messages: 0,
       messageWindow: Date.now(),
       ip: String(request.headers?.["x-forwarded-for"] || request.socket?.remoteAddress || "unknown").split(",")[0].trim(),
@@ -75,12 +76,14 @@ export class LobbyService {
     if (exists) return this.error(client, "ALIAS_TAKEN", "That callsign is already online. Choose another one.");
     client.alias = alias;
     client.loadoutId = LOADOUTS[payload.loadoutId] ? payload.loadoutId : "recon";
+    client.characterId = resolveCharacterId(payload.characterId);
     this.send(client, "registered", { self: this.publicUser(client) });
     this.broadcastPresence();
   }
 
   updateProfile(client, payload) {
     if (LOADOUTS[payload.loadoutId]) client.loadoutId = payload.loadoutId;
+    client.characterId = resolveCharacterId(payload.characterId || client.characterId);
     const room = this.rooms.get(client.roomId);
     if (room?.status === "waiting") this.broadcastRoom(room);
   }
@@ -89,6 +92,7 @@ export class LobbyService {
     if (client.roomId) return this.error(client, "IN_ROOM", "Leave the current room first.");
     const mapId = MAPS[payload.mapId] ? payload.mapId : "city";
     const modeId = GAME_MODES[payload.modeId] ? payload.modeId : "4v4";
+    const rules = resolveMatchCondition(payload);
     let id = roomCode();
     while (this.rooms.has(id)) id = roomCode();
     const room = {
@@ -96,6 +100,9 @@ export class LobbyService {
       ownerId: client.id,
       mapId,
       modeId,
+      conditionId: rules.id,
+      killTarget: rules.killTarget,
+      timeLimit: rules.timeLimit,
       status: "waiting",
       members: [client.id],
       invited: new Set(),
@@ -161,7 +168,7 @@ export class LobbyService {
     members.forEach(member => this.send(member, "match_start", {
       room: this.publicRoom(room),
       assignment: room.match.assignmentFor(member.id),
-      duration: MATCH_TIME,
+      duration: room.match.rules.timeLimit,
     }));
     this.broadcastRoom(room);
     this.broadcastPresence();
@@ -224,6 +231,7 @@ export class LobbyService {
       roomId: client.roomId,
       available: Boolean(client.alias && !client.roomId),
       loadoutId: client.loadoutId,
+      characterId: client.characterId,
     };
   }
 
@@ -233,6 +241,9 @@ export class LobbyService {
       ownerId: room.ownerId,
       mapId: room.mapId,
       modeId: room.modeId,
+      conditionId: room.conditionId,
+      killTarget: room.killTarget,
+      timeLimit: room.timeLimit,
       status: room.status,
       maxHumans: this.maxHumans(room),
       members: room.members.map(id => this.clients.get(id)).filter(Boolean).map(client => this.publicUser(client)),

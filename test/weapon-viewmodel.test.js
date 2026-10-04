@@ -27,6 +27,22 @@ test("melee attacks swing without creating a muzzle flash", () => {
   assert.equal(getViewmodelProfile("axe").kind, "axe");
 });
 
+test("the archery loadout has distinct bow, sidearm, and dual-blade viewmodels", () => {
+  assert.equal(getViewmodelProfile("powerBow").kind, "bow");
+  assert.equal(getViewmodelProfile("desertEagle").kind, "pistol");
+  assert.equal(getViewmodelProfile("dualBlades").kind, "dual-blades");
+
+  const bow = new WeaponViewmodel();
+  bow.triggerShot({ weaponId: "powerBow", profile: "bow" });
+  assert.equal(bow.firing, false);
+  assert.equal(bow.state.melee, 1);
+
+  const blades = new WeaponViewmodel();
+  blades.triggerShot({ weaponId: "dualBlades", profile: "knife" });
+  assert.equal(blades.firing, false);
+  assert.equal(blades.state.melee, 1);
+});
+
 test("paused frames do not advance weapon presentation state", () => {
   const state = { kick: .7, muzzle: .04, melee: .5, time: 3, weaponId: "ak47" };
   assert.strictEqual(advanceWeaponEffects(state, 0), state);
@@ -51,11 +67,19 @@ test("walking bob and recoil preserve the forward-facing muzzle orientation", ()
     1280,
     720,
     { activity: 1, phase: Math.PI / 2 },
-    { kick: .7, time: 2 },
+    { kick: .7, time: 2, shotSequence: 3 },
   );
   assert.ok(pose.muzzle.x < pose.origin.x);
   assert.ok(pose.muzzle.y < pose.origin.y);
   assert.ok(pose.angle > .7 && pose.angle < 1);
+});
+
+test("accepted shots add deterministic recoil vibration without reversing the barrel", () => {
+  const base = getViewmodelPose("barrett", 1280, 720, {}, { kick: .8, time: 1, shotSequence: 2 });
+  const next = getViewmodelPose("barrett", 1280, 720, {}, { kick: .8, time: 1.01, shotSequence: 2 });
+  assert.notDeepEqual(base.origin, next.origin);
+  assert.ok(base.muzzle.x < base.origin.x && base.muzzle.y < base.origin.y);
+  assert.ok(next.muzzle.x < next.origin.x && next.muzzle.y < next.origin.y);
 });
 
 test("portrait viewports keep long firearm muzzles inside the visible scene", () => {

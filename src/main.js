@@ -1,11 +1,14 @@
-import { LOADOUTS, MAPS, TEAM, THROWABLES, WEAPONS } from "./config.js?v=20261004-fps-v4";
-import { GameAudio } from "./audio.js?v=20261004-fps-v4";
-import { GameState } from "./game.js?v=20261004-fps-v4";
-import { applyDocumentTranslations, onLocaleChange, t, toggleLocale } from "./i18n.js?v=20261004-fps-v4";
-import { InputController } from "./input.js?v=20261004-fps-v4";
-import { NetworkClient } from "./network.js?v=20261004-fps-v4";
-import { NetworkGameState } from "./network-game.js?v=20261004-fps-v4";
-import { Renderer } from "./renderer.js?v=20261004-fps-v4";
+import {
+  CHARACTER_PROFILES, DEFAULT_CHARACTER_ID, DEFAULT_CONDITION_ID, LOADOUTS, MAPS, MATCH_CONDITIONS,
+  MATCH_CONDITION_IDS, TEAM, THROWABLES, VEHICLE_TYPES, WEAPONS, alliedPodium, summarizeActorStats,
+} from "./config.js?v=20261005-content-v6";
+import { GameAudio } from "./audio.js?v=20261005-content-v6";
+import { GameState } from "./game.js?v=20261005-content-v6";
+import { applyDocumentTranslations, getLocale, onLocaleChange, t, toggleLocale } from "./i18n.js?v=20261005-content-v6";
+import { InputController } from "./input.js?v=20261005-content-v6";
+import { NetworkClient } from "./network.js?v=20261005-content-v6";
+import { NetworkGameState } from "./network-game.js?v=20261005-content-v6";
+import { Renderer } from "./renderer.js?v=20261005-content-v6";
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => Array.from(document.querySelectorAll(selector));
@@ -14,14 +17,22 @@ const hud = $("#hud");
 const landing = $("#landing");
 const modal = $("#modal");
 const aliasModal = $("#alias-modal");
+const podiumModal = $("#podium-modal");
 const rankingModal = $("#ranking-modal");
 const startButton = $("#start-button");
 const resumeButton = $("#resume-button");
-const audio = new GameAudio();
+const audio = new GameAudio({ translate: t, locale: getLocale });
 const input = new InputController(canvas);
 const renderer = new Renderer(canvas, $("#radar"));
 const network = new NetworkClient();
-const selected = { versionId: null, mapId: "city", modeId: "4v4", loadoutId: "recon" };
+const selected = {
+  versionId: null,
+  mapId: "city",
+  modeId: "4v4",
+  loadoutId: "recon",
+  characterId: DEFAULT_CHARACTER_ID,
+  conditionId: DEFAULT_CONDITION_ID,
+};
 const touchDevice = navigator.maxTouchPoints > 0 || "ontouchstart" in window;
 
 let game;
@@ -31,31 +42,22 @@ let modalMode = "pause";
 let announcementTimer = 0;
 let lastTime = performance.now();
 let pendingInvite = null;
+let lastMatchResult = null;
 
 function handleGameEvent(type, payload) {
   if (type === "shot") {
     const localPlayerId = game.player?.id;
     renderer.triggerShot(payload, localPlayerId);
-    if (payload.actorId === localPlayerId && payload.profile !== "knife" && payload.profile !== "axe") pulseReticleFlash();
+    if (payload.actorId === localPlayerId && !["knife", "axe", "bow"].includes(payload.profile)) pulseReticleFlash();
   }
+  if (type === "grenade_throw" && game.player) audio.grenadeThrow(payload, game.player);
   if (type === "announce") announce(localizeAnnouncement(payload));
   if (type === "death") {
     modalMode = "death";
     showModal(t("modal.death.title"), t("modal.death.copy"), t("modal.death.kicker"), false);
   }
   if (type === "respawn") { hideModal(); announce(t("announce.respawned")); }
-  if (type === "finish") {
-    const won = payload.winner === TEAM.SEAL;
-    modalMode = "finish";
-    showModal(
-      t(won ? "modal.finish.win.title" : "modal.finish.loss.title"),
-      t("modal.finish.score", { seal: pad(payload.score.seal, 2), terror: pad(payload.score.terror, 2) }),
-      t(won ? "ranking.blueWins" : "ranking.redWins"),
-      true,
-      t("modal.playAgain"),
-    );
-    exitPointerLock();
-  }
+  if (type === "finish") showMatchEnd(payload);
 }
 
 function pulseReticleFlash() {
@@ -70,11 +72,17 @@ game = singleGame;
 
 function pad(value, length) { return String(value).padStart(length, "0"); }
 
+function formatTime(seconds) {
+  const safeSeconds = Math.max(0, Math.round(Number(seconds) || 0));
+  return `${pad(Math.floor(safeSeconds / 60), 2)}:${pad(safeSeconds % 60, 2)}`;
+}
+
 function mapName(map) { return t(map.nameKey); }
 function loadoutName(loadout) { return t(loadout.nameKey); }
 
 function weaponName(weaponId) {
-  if (weaponId === "tankCannon") return t("weapon.tankCannon.name");
+  const vehicleWeapon = Object.values(VEHICLE_TYPES).find(profile => profile.weapon.id === weaponId)?.weapon;
+  if (vehicleWeapon) return t(vehicleWeapon.nameKey);
   if (WEAPONS[weaponId]) return t(WEAPONS[weaponId].nameKey);
   if (THROWABLES[weaponId]) return t(THROWABLES[weaponId].nameKey);
   return weaponId;
@@ -124,10 +132,12 @@ function bindTap(element, handler) {
   let lastTouch = 0;
   element.addEventListener("touchend", event => {
     if (event.cancelable) event.preventDefault();
+    if (element.disabled) return;
     lastTouch = Date.now();
     handler(event);
   }, { passive: false });
   element.addEventListener("click", event => {
+    if (element.disabled) return;
     if (Date.now() - lastTouch < 700) return;
     handler(event);
   });
@@ -135,6 +145,29 @@ function bindTap(element, handler) {
 
 function selectOption(selector, target) {
   $$(selector).forEach(button => button.classList.toggle("selected", button === target));
+}
+
+function syncRoomRuleControls(room) {
+  const locked = Boolean(room);
+  $$('[data-version], [data-map], [data-mode]').forEach(button => { button.disabled = locked; });
+  $("#match-condition").disabled = locked;
+  if (!room) return;
+
+  if (MAPS[room.mapId]) {
+    selected.mapId = room.mapId;
+    selectOption("[data-map]", $(`[data-map="${room.mapId}"]`));
+    landing.classList.toggle("map-city", room.mapId === "city");
+    landing.classList.toggle("map-wild", room.mapId === "wild");
+    $("#setup-code").textContent = MAPS[room.mapId].code;
+  }
+  if ($(`[data-mode="${room.modeId}"]`)) {
+    selected.modeId = room.modeId;
+    selectOption("[data-mode]", $(`[data-mode="${room.modeId}"]`));
+  }
+  if (MATCH_CONDITIONS[room.conditionId]) {
+    selected.conditionId = room.conditionId;
+    $("#match-condition").value = room.conditionId;
+  }
 }
 
 function setVersion(versionId, button) {
@@ -166,12 +199,38 @@ $$('[data-mode]').forEach(button => bindTap(button, () => {
   selectOption("[data-mode]", button);
 }));
 
+function renderConditionOptions() {
+  const select = $("#match-condition");
+  const activeId = MATCH_CONDITIONS[selected.conditionId] ? selected.conditionId : DEFAULT_CONDITION_ID;
+  select.replaceChildren();
+  MATCH_CONDITION_IDS.forEach(conditionId => {
+    const option = document.createElement("option");
+    option.value = conditionId;
+    option.textContent = t(`condition.${conditionId}`);
+    option.selected = conditionId === activeId;
+    select.append(option);
+  });
+}
+
+$("#match-condition").addEventListener("change", event => {
+  selected.conditionId = MATCH_CONDITIONS[event.target.value] ? event.target.value : DEFAULT_CONDITION_ID;
+});
+
 $$('[data-loadout]').forEach(button => bindTap(button, () => {
   selected.loadoutId = button.dataset.loadout;
   selectOption("[data-loadout]", button);
   if (network.self) {
     network.self.loadoutId = selected.loadoutId;
-    network.updateProfile(selected.loadoutId);
+    network.updateProfile(selected.loadoutId, selected.characterId);
+  }
+}));
+
+$$('[data-character]').filter(button => button.classList.contains("character-option")).forEach(button => bindTap(button, () => {
+  selected.characterId = CHARACTER_PROFILES[button.dataset.character] ? button.dataset.character : DEFAULT_CHARACTER_ID;
+  selectOption(".character-option", button);
+  if (network.self) {
+    network.self.characterId = selected.characterId;
+    network.updateProfile(selected.loadoutId, selected.characterId);
   }
 }));
 
@@ -189,7 +248,7 @@ async function registerNetworkIdentity() {
   confirm.disabled = true;
   error.textContent = t("alias.connecting");
   try {
-    const self = await network.connectAndRegister(alias, selected.loadoutId);
+    const self = await network.connectAndRegister(alias, selected.loadoutId, selected.characterId);
     aliasModal.classList.add("is-hidden");
     $("#network-lobby").classList.remove("is-hidden");
     $("#network-alias").textContent = self.alias;
@@ -214,8 +273,8 @@ function beginSolo() {
 function createNetworkRoom() {
   if (!network.self) { showAliasModal(); return; }
   if (network.room) return;
-  network.updateProfile(selected.loadoutId);
-  network.createRoom({ mapId: selected.mapId, modeId: selected.modeId });
+  network.updateProfile(selected.loadoutId, selected.characterId);
+  network.createRoom({ mapId: selected.mapId, modeId: selected.modeId, conditionId: selected.conditionId });
   startButton.disabled = true;
   startButton.querySelector("span").textContent = t("start.creatingRoom");
 }
@@ -229,10 +288,13 @@ function begin() {
 function enterBattle() {
   paused = false;
   modalMode = "pause";
+  lastMatchResult = null;
+  audio.resetWorld();
   renderer.resetCombatEffects();
   landing.classList.add("is-hidden");
   hud.classList.remove("is-hidden");
   hideModal();
+  podiumModal.classList.add("is-hidden");
   rankingModal.classList.add("is-hidden");
   lockPointer();
   audio.unlock();
@@ -249,6 +311,8 @@ function pauseBattle() {
 
 function returnToLobby() {
   paused = false;
+  lastMatchResult = null;
+  podiumModal.classList.add("is-hidden");
   rankingModal.classList.add("is-hidden");
   hud.classList.add("is-hidden");
   landing.classList.remove("is-hidden");
@@ -261,6 +325,7 @@ function renderLobby() {
   $("#network-alias").textContent = network.self.alias;
   $("#network-status").textContent = t(network.connected ? "lobby.online" : "lobby.connectionLost");
   const room = network.room;
+  syncRoomRuleControls(room);
   $("#network-no-room").classList.toggle("is-hidden", Boolean(room));
   $("#room-console").classList.toggle("is-hidden", !room);
   startButton.disabled = Boolean(room);
@@ -268,6 +333,7 @@ function renderLobby() {
   if (!room) return;
   $("#room-code").textContent = room.id;
   $("#room-capacity").textContent = t("lobby.capacity", { members: room.members.length, maximum: room.maxHumans });
+  $("#room-rules").textContent = t("lobby.rules", { kills: room.killTarget, time: formatTime(room.timeLimit) });
   const memberRoot = $("#room-members");
   memberRoot.replaceChildren();
   room.members.forEach(member => {
@@ -276,7 +342,8 @@ function renderLobby() {
     const name = document.createElement("span");
     name.textContent = member.alias;
     const detail = document.createElement("small");
-    detail.textContent = t(member.id === room.ownerId ? "lobby.owner" : "lobby.member");
+    const role = t(member.id === room.ownerId ? "lobby.owner" : "lobby.member");
+    detail.textContent = `${role} · ${t(`character.${member.characterId || DEFAULT_CHARACTER_ID}.name`)}`;
     row.append(name, detail);
     memberRoot.append(row);
   });
@@ -313,20 +380,64 @@ function renderPendingInvite() {
   $("#invite-copy").textContent = copy;
 }
 
-function showRanking(result) {
-  exitPointerLock();
-  paused = true;
-  const sealWon = result.winner === TEAM.SEAL;
-  $("#ranking-result").textContent = t(sealWon ? "ranking.blueWins" : "ranking.redWins");
+function winnerMessage(result) {
+  return t(result.winner === TEAM.SEAL ? "ranking.guardiansWin" : "ranking.infiltratorsWin");
+}
+
+function isLocalRankingEntry(entry) {
+  if (selected.versionId === "solo") return Boolean(entry.isPlayer || entry.actorId === game.player?.id);
+  return Boolean(entry.userId && entry.userId === network.self?.id);
+}
+
+function rankingName(entry) {
+  const name = isLocalRankingEntry(entry) && selected.versionId === "solo" ? t("hud.you") : entry.name;
+  return `${name}${entry.isBot ? " [AI]" : ""}`;
+}
+
+function renderPodium(result) {
+  const localTeam = game.player?.team || TEAM.SEAL;
+  const won = result.winner === localTeam;
+  $("#podium-title").textContent = t(won ? "modal.finish.win.title" : "modal.finish.loss.title");
+  $("#podium-result").textContent = winnerMessage(result);
+  $("#podium-seal-score").textContent = pad(result.score.seal, 2);
+  $("#podium-terror-score").textContent = pad(result.score.terror, 2);
+  const localEntry = result.rankings.find(isLocalRankingEntry) || { kills: 0, deaths: 0 };
+  $("#podium-local-stats").textContent = t("podium.localStats", localEntry);
+  const root = $("#podium-players");
+  root.replaceChildren();
+  alliedPodium(result.rankings, localTeam).forEach((entry, index) => {
+    const place = index + 1;
+    const card = document.createElement("article");
+    card.className = `podium-player place-${place}`;
+    const portrait = document.createElement("i");
+    portrait.className = "operator";
+    portrait.dataset.character = CHARACTER_PROFILES[entry.characterId] ? entry.characterId : DEFAULT_CHARACTER_ID;
+    const badge = document.createElement("em");
+    badge.textContent = String(place);
+    const info = document.createElement("div");
+    info.className = "podium-player-info";
+    const name = document.createElement("b");
+    name.textContent = rankingName(entry);
+    const stats = document.createElement("small");
+    stats.textContent = t("podium.playerStats", entry);
+    info.append(name, stats);
+    card.append(portrait, badge, info);
+    root.append(card);
+  });
+  $("#match-end-action span").textContent = t(selected.versionId === "solo" ? "modal.playAgain" : "ranking.return");
+}
+
+function renderRanking(result) {
+  $("#ranking-result").textContent = winnerMessage(result);
   $("#ranking-seal-score").textContent = pad(result.score.seal, 2);
   $("#ranking-terror-score").textContent = pad(result.score.terror, 2);
   const body = $("#ranking-body");
   body.replaceChildren();
   result.rankings.forEach(entry => {
     const row = document.createElement("tr");
-    if (entry.userId === network.self?.id) row.classList.add("self");
+    if (isLocalRankingEntry(entry)) row.classList.add("self");
     if (entry.isBot) row.classList.add("bot");
-    const values = [entry.rank, `${entry.name}${entry.isBot ? " [AI]" : ""}`, t(entry.team === TEAM.SEAL ? "team.seal" : "team.terror"), entry.kills, entry.deaths, entry.kd.toFixed(2), entry.damage, entry.points];
+    const values = [entry.rank, rankingName(entry), t(entry.team === TEAM.SEAL ? "team.guardians" : "team.infiltrators"), entry.kills, entry.deaths, entry.kd.toFixed(2), entry.damage, entry.points];
     values.forEach(value => {
       const cell = document.createElement("td");
       cell.textContent = value;
@@ -334,7 +445,42 @@ function showRanking(result) {
     });
     body.append(row);
   });
+}
+
+function showMatchEnd(result) {
+  lastMatchResult = result;
+  game.finished = true;
+  paused = true;
+  input.resetTransient();
+  hideModal();
+  exitPointerLock();
+  renderPodium(result);
+  renderRanking(result);
+  rankingModal.classList.add("is-hidden");
+  podiumModal.classList.remove("is-hidden");
+}
+
+function openFullRanking() {
+  if (!lastMatchResult) return;
+  podiumModal.classList.add("is-hidden");
   rankingModal.classList.remove("is-hidden");
+}
+
+function backToPodium() {
+  if (!lastMatchResult) return;
+  rankingModal.classList.add("is-hidden");
+  podiumModal.classList.remove("is-hidden");
+}
+
+function completeMatchEndAction() {
+  if (selected.versionId === "network") {
+    returnToLobby();
+    return;
+  }
+  game.reset();
+  game.start();
+  enterBattle();
+  announce(t("announce.newRound", { map: mapName(game.map) }));
 }
 
 network.on("registered", renderLobby);
@@ -349,7 +495,19 @@ network.on("notice", payload => {
   const key = `notice.${payload.code}`;
   $("#network-status").textContent = t(key, payload.params || {});
 });
-network.on("status", payload => { $("#network-status").textContent = t(`status.${payload.code}`); });
+network.on("status", payload => {
+  $("#network-status").textContent = t(`status.${payload.code}`);
+  if (!payload.connected) {
+    pendingInvite = null;
+    syncRoomRuleControls(null);
+    $("#network-no-room").classList.remove("is-hidden");
+    $("#room-console").classList.add("is-hidden");
+    $("#invite-card").classList.add("is-hidden");
+    $("#network-alias").textContent = t("lobby.disconnected");
+    startButton.disabled = !selected.versionId;
+    updateStartButtonLabel();
+  }
+});
 network.on("error", payload => {
   const message = localizedError(payload.code, payload.message);
   if (!aliasModal.classList.contains("is-hidden")) $("#alias-error").textContent = message;
@@ -369,7 +527,7 @@ network.on("match_start", payload => {
 });
 network.on("snapshot", payload => { if (networkGame) networkGame.applySnapshot(payload); });
 network.on("combat_event", payload => { if (networkGame) networkGame.handleCombatEvent(payload); });
-network.on("match_end", showRanking);
+network.on("match_end", showMatchEnd);
 
 function showModal(title, copy, kicker = t("modal.paused.kicker"), showButton = true, buttonText = t("modal.continue")) {
   $("#modal-title").textContent = title;
@@ -383,17 +541,8 @@ function showModal(title, copy, kicker = t("modal.paused.kicker"), showButton = 
 function hideModal() { modal.classList.add("is-hidden"); }
 
 function resume() {
-  if (modalMode === "finish" && selected.versionId === "solo") {
-    game.reset();
-    game.start();
-    modalMode = "pause";
-    paused = false;
-    hideModal();
-    announce(t("announce.newRound", { map: mapName(game.map) }));
-  } else {
-    paused = false;
-    hideModal();
-  }
+  paused = false;
+  hideModal();
   lockPointer();
   audio.unlock();
 }
@@ -416,12 +565,17 @@ function getLocation() {
 
 function updateHud(dt) {
   if (!game.player) return;
-  $("#seal-score").textContent = pad(game.score.seal, 2);
-  $("#terror-score").textContent = pad(game.score.terror, 2);
-  const minutes = Math.floor(game.time / 60);
-  const seconds = Math.floor(game.time % 60);
-  $("#clock").textContent = `${pad(minutes, 2)}:${pad(seconds, 2)}`;
-  $("#match-limit").textContent = t("hud.scoreLimit", { score: game.mode.scoreLimit, mode: game.mode.label });
+  const stats = summarizeActorStats(game.actors, game.player.id);
+  const guardians = stats.teams[TEAM.SEAL] || { kills: 0, deaths: 0 };
+  const infiltrators = stats.teams[TEAM.TERROR] || { kills: 0, deaths: 0 };
+  $("#seal-kills").textContent = pad(guardians.kills, 2);
+  $("#seal-deaths").textContent = pad(guardians.deaths, 2);
+  $("#terror-kills").textContent = pad(infiltrators.kills, 2);
+  $("#terror-deaths").textContent = pad(infiltrators.deaths, 2);
+  $("#local-kills").textContent = stats.local.kills;
+  $("#local-deaths").textContent = stats.local.deaths;
+  $("#clock").textContent = formatTime(game.time);
+  $("#match-limit").textContent = t("hud.scoreLimit", { score: game.rules.killTarget, mode: game.mode.label });
   $("#health").textContent = Math.ceil(game.player.health);
   $("#health-fill").style.width = `${Math.max(0, game.player.health)}%`;
   $("#health-fill").style.background = game.player.health < 35 ? "#ff654e" : "#5ce5ff";
@@ -429,25 +583,35 @@ function updateHud(dt) {
   $("#alive-count").textContent = `${counts.seal} : ${counts.terror}`;
   $("#location").textContent = getLocation();
   $("#radar-map").textContent = mapName(game.map);
-  $("#interaction").classList.toggle("is-hidden", !game.nearTank);
   $("#hit-marker").classList.toggle("show", game.hitMarker > 0);
   hud.classList.toggle("scoped", game.player.scoped && game.player.alive);
-  const ownTank = game.tank.driverId === game.player.id;
-  $("#tank-hud").classList.toggle("is-hidden", !ownTank);
-  $("#tank-health").textContent = Math.ceil(game.tank.health);
-  $("#tank-speed").textContent = pad(Math.round(Math.abs(game.tank.speed) * 31), 3);
+  const interactionVehicle = game.interactionVehicle;
+  $("#interaction").classList.toggle("is-hidden", !interactionVehicle);
+  if (interactionVehicle) {
+    const profile = VEHICLE_TYPES[interactionVehicle.type] || VEHICLE_TYPES.tank;
+    $("#interaction span").textContent = t(game.currentVehicle ? profile.exitKey : profile.interactKey);
+  }
+  const vehicle = game.currentVehicle;
+  $("#tank-hud").classList.toggle("is-hidden", !vehicle);
+  if (vehicle) {
+    const profile = VEHICLE_TYPES[vehicle.type] || VEHICLE_TYPES.tank;
+    $("#tank-health").textContent = Math.ceil(vehicle.health);
+    $("#tank-speed").textContent = pad(Math.round(Math.abs(vehicle.speed) * 31), 3);
+    $("#tank-hud p").textContent = t(profile.hudDetailKey);
+  }
   updateWeaponPanel();
   updateFeed();
   if (announcementTimer > 0 && (announcementTimer -= dt) <= 0) $("#announcement").classList.add("is-hidden");
 }
 
 function updateWeaponPanel() {
-  const driving = game.tank.driverId === game.player.id;
-  if (driving) {
-    $("#weapon-slot").textContent = t("hud.weapon.vehicle");
-    $("#weapon-name").textContent = t("weapon.tankCannon.name");
-    $("#weapon-mode").textContent = t("hud.weapon.tankMode");
-    $("#throwable-name").textContent = t("hud.weapon.tankAmmo");
+  const vehicle = game.currentVehicle;
+  if (vehicle) {
+    const profile = VEHICLE_TYPES[vehicle.type] || VEHICLE_TYPES.tank;
+    $("#weapon-slot").textContent = t(profile.hudSlotKey);
+    $("#weapon-name").textContent = t(profile.weapon.nameKey);
+    $("#weapon-mode").textContent = t(profile.weapon.modeKey);
+    $("#throwable-name").textContent = t(profile.weapon.ammoKey);
   } else {
     const slots = { primary: "hud.weapon.primary", secondary: "hud.weapon.secondary", melee: "hud.weapon.melee" };
     $("#weapon-slot").textContent = t(slots[game.player.weaponSlot] || "hud.weapon.primary");
@@ -489,6 +653,7 @@ function frame(now) {
     } else forwarded.push(action);
   }
   if (!paused) game.update(dt, { ...state, items: forwarded });
+  if (game.started) audio.updateWorld(game, paused ? 0 : dt);
   renderer.render(game, paused ? 0 : dt);
   if (game.started) updateHud(dt);
   requestAnimationFrame(frame);
@@ -519,7 +684,9 @@ bindTap($("#accept-invite"), () => {
   pendingInvite = null;
   $("#invite-card").classList.add("is-hidden");
 });
-bindTap($("#ranking-close"), returnToLobby);
+bindTap($("#ranking-open"), openFullRanking);
+bindTap($("#ranking-close"), backToPodium);
+bindTap($("#match-end-action"), completeMatchEndAction);
 $("#alias-input").addEventListener("keydown", event => { if (event.key === "Enter") registerNetworkIdentity(); });
 window.addEventListener("keydown", event => {
   if (event.code !== "Enter" || !aliasModal.classList.contains("is-hidden")) return;
@@ -537,10 +704,16 @@ window.addEventListener("blur", () => {
   if (game === networkGame) networkGame.suspendInput();
 });
 onLocaleChange(() => {
+  renderConditionOptions();
   updateStartButtonLabel();
   renderPendingInvite();
   if (network.self) renderLobby();
+  if (lastMatchResult) {
+    renderPodium(lastMatchResult);
+    renderRanking(lastMatchResult);
+  }
 });
 applyDocumentTranslations();
+renderConditionOptions();
 updateStartButtonLabel();
 requestAnimationFrame(frame);
