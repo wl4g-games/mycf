@@ -1,5 +1,12 @@
-import { GAME_MODES, LOADOUTS, MAPS, MATCH_TIME, TEAM, THROWABLES, WEAPONS, distance, isSolid, normalizeAngle, spawnCells } from "./config.js?v=20261004-fps-v4";
-import { applyCameraPitch } from "./camera.js?v=20261004-fps-v4";
+import {
+  DEFAULT_CHARACTER_ID, GAME_MODES, LOADOUTS, MAPS, MATCH_TIME, TEAM, THROWABLES, WEAPONS,
+  distance, isSolid, normalizeAngle, resolveCharacterId, resolveMatchCondition, spawnCells,
+} from "./config.js?v=20261005-content-v6";
+import { applyCameraPitch } from "./camera.js?v=20261005-content-v6";
+import {
+  ACTOR_COLLISION_RADIUS, collidesWithVehicle, createVehicleStates, drivenVehicle,
+  resolveInteractionVehicle,
+} from "./vehicle-system.js?v=20261005-content-v6";
 
 export class NetworkGameState {
   constructor(client, audio, emit = () => {}) {
@@ -27,7 +34,14 @@ export class NetworkGameState {
     this.assignment = payload.assignment;
     this.map = MAPS[room.mapId] || MAPS.city;
     this.mode = GAME_MODES[room.modeId] || GAME_MODES["4v4"];
-    this.settings = { mapId: this.map.id, modeId: this.mode.id, loadoutId: this.client.self.loadoutId || "recon" };
+    this.rules = resolveMatchCondition(room);
+    this.settings = {
+      mapId: this.map.id,
+      modeId: this.mode.id,
+      loadoutId: this.client.self.loadoutId || "recon",
+      characterId: resolveCharacterId(this.client.self.characterId || DEFAULT_CHARACTER_ID),
+      ...this.rules,
+    };
     const spawn = spawnCells(this.map, this.assignment.team)[0];
     const loadout = LOADOUTS[this.settings.loadoutId] || LOADOUTS.recon;
     this.player = {
@@ -41,6 +55,7 @@ export class NetworkGameState {
       health: 100,
       alive: true,
       scoped: false,
+      characterId: this.settings.characterId,
       loadoutId: loadout.id,
       weaponSlot: "primary",
       weaponId: loadout.primary,
@@ -50,10 +65,16 @@ export class NetworkGameState {
     this.actors = [this.player];
     this.localAngle = this.player.angle;
     this.localPitch = 0;
-    this.time = Number(payload.duration) || MATCH_TIME;
-    this.tank = { ...this.map.tank, turretAngle: this.map.tank.angle, health: 100, occupied: false, driverId: null, speed: 0 };
+    this.time = Number(payload.duration) || this.rules.timeLimit || MATCH_TIME;
+    this.vehicles = createVehicleStates(this.map);
+    this.syncVehicleAliases();
     this.started = true;
     this.finished = false;
+  }
+
+  syncVehicleAliases() {
+    this.tank = this.vehicles.find(vehicle => vehicle.type === "tank") || this.vehicles[0];
+    this.armoredCar = this.vehicles.find(vehicle => vehicle.type === "armoredCar") || null;
   }
 
   applySnapshot(snapshot) {
@@ -61,11 +82,15 @@ export class NetworkGameState {
     const previousAlive = this.player?.alive ?? true;
     this.map = MAPS[snapshot.mapId] || this.map;
     this.mode = GAME_MODES[snapshot.modeId] || this.mode;
+    this.rules = resolveMatchCondition({ conditionId: snapshot.conditionId || this.rules.id });
     this.time = snapshot.time;
     this.score = snapshot.score;
     this.finished = snapshot.finished;
     this.actors = snapshot.actors || [];
-    this.tank = snapshot.tank;
+    this.vehicles = Array.isArray(snapshot.vehicles) && snapshot.vehicles.length
+      ? snapshot.vehicles
+      : snapshot.tank ? [{ type: "tank", ...snapshot.tank }] : this.vehicles;
+    this.syncVehicleAliases();
     this.projectiles = snapshot.projectiles || [];
     this.effects = snapshot.effects || [];
     this.feed = snapshot.feed || [];
@@ -82,17 +107,16 @@ export class NetworkGameState {
 
   handleCombatEvent(event) {
     if (event.type === "shot") {
-      if (event.userId === this.client.self.id) {
-        if (event.profile === "knife" || event.profile === "axe") this.audio.knife(event.profile);
-        else this.audio.gunshot(event.profile);
+      const localShot = event.userId === this.client.self.id;
+      this.audio.weaponShot({
+        weaponId: event.weaponId || this.player?.weaponId,
+        profile: event.profile,
+        source: localShot ? undefined : event.from,
+        listener: localShot ? undefined : this.player,
+        hit: Boolean(event.hit),
+      });
+      if (localShot) {
         this.shake = event.profile === "sniper" ? .48 : event.profile === "machinegun" ? .25 : .18;
-      } else {
-        const range = event.from && this.player
-          ? Math.hypot(event.from.x - this.player.x, event.from.y - this.player.y)
-          : 12;
-        if (event.profile !== "knife" && event.profile !== "axe") {
-          this.audio.distantShot(event.profile, range);
-        }
       }
       if (event.hit && event.victimId === this.player?.id) this.flash = Math.max(this.flash, .28);
       this.emit("shot", {
@@ -100,9 +124,27 @@ export class NetworkGameState {
         weaponId: event.weaponId || this.player?.weaponId,
       });
     }
-    if (event.type === "tank_shot") { this.audio.tankShot(); this.shake = 1; }
-    if (event.type === "explosion") { this.audio.explosion(event.explosionType); this.shake = Math.max(this.shake, .78); }
-    if (event.type === "kill" && event.attackerUserId === this.client.self.id) { this.hitMarker = .16; this.audio.hit(); }
+    if (event.type === "grenade_throw") this.emit("grenade_throw", event);
+    if (event.type === "tank_shot") {
+      const localShot = event.userId === this.client.self.id;
+      this.audio.tankShot({
+        source: localShot ? undefined : event,
+        listener: localShot ? undefined : this.player,
+      });
+      if (localShot) this.shake = 1;
+      else {
+        const shotDistance = distance(event, this.player);
+        if (shotDistance < 32) this.shake = Math.max(this.shake, (1 - shotDistance / 32) * .34);
+      }
+    }
+    if (event.type === "explosion") {
+      this.audio.explosion(event.explosionType, { source: event, listener: this.player });
+      this.shake = Math.max(this.shake, .78);
+    }
+    if (event.type === "shot" && event.hit && event.userId === this.client.self.id) {
+      this.hitMarker = .16;
+      this.audio.hit();
+    }
   }
 
   update(dt, input) {
@@ -114,7 +156,13 @@ export class NetworkGameState {
     this.localPitch = applyCameraPitch(this.localPitch, input.pitch);
     this.player.angle = this.localAngle;
     this.player.pitch = this.localPitch;
-    this.pendingActions.push(...input.items);
+    for (const action of input.items) {
+      if (action[0] !== "interact" || action[1]) {
+        this.pendingActions.push(action);
+        continue;
+      }
+      this.pendingActions.push(["interact", this.interactionVehicle?.id || null]);
+    }
     this.predict(dt, input.movement);
     this.sendClock += dt;
     if (this.sendClock < .05) return;
@@ -140,17 +188,28 @@ export class NetworkGameState {
   }
 
   predict(dt, movement) {
-    if (!this.player.alive || this.tank.driverId === this.player.id) return;
+    if (!this.player.alive || this.currentVehicle) return;
     const speed = this.player.scoped ? 1.35 : 3.1;
     const forward = -movement.y;
     const strafe = movement.x;
     const dx = (Math.cos(this.localAngle) * forward + Math.cos(this.localAngle + Math.PI / 2) * strafe) * speed * dt;
     const dy = (Math.sin(this.localAngle) * forward + Math.sin(this.localAngle + Math.PI / 2) * strafe) * speed * dt;
-    if (!isSolid(this.map, this.player.x + dx, this.player.y)) this.player.x += dx;
-    if (!isSolid(this.map, this.player.x, this.player.y + dy)) this.player.y += dy;
+    if (!this.collides(this.player.x + dx, this.player.y, ACTOR_COLLISION_RADIUS)) this.player.x += dx;
+    if (!this.collides(this.player.x, this.player.y + dy, ACTOR_COLLISION_RADIUS)) this.player.y += dy;
   }
 
-  get nearTank() { return !this.tank.occupied && this.tank.health > 0 && distance(this.player, this.tank) < 1.65; }
+  collides(x, y, radius) {
+    return isSolid(this.map, x - radius, y - radius)
+      || isSolid(this.map, x + radius, y - radius)
+      || isSolid(this.map, x - radius, y + radius)
+      || isSolid(this.map, x + radius, y + radius)
+      || collidesWithVehicle(this.vehicles, x, y, radius);
+  }
+
+  get currentVehicle() { return drivenVehicle(this.vehicles || [], this.player?.id); }
+  get interactionVehicle() { return this.currentVehicle || resolveInteractionVehicle(this.vehicles || [], this.player); }
+  get nearVehicle() { return Boolean(this.interactionVehicle); }
+  get nearTank() { return this.nearVehicle; }
   get currentLoadout() { return LOADOUTS[this.player.loadoutId] || LOADOUTS.recon; }
   get currentWeapon() { return WEAPONS[this.player.weaponId] || WEAPONS.ak47; }
   get currentThrowable() { return THROWABLES[this.player.throwableId] || THROWABLES.firework; }

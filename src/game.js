@@ -1,9 +1,14 @@
 import {
-  BOT_NAMES, GAME_MODES, LOADOUTS, MAPS, MATCH_TIME, TEAM, THROWABLES, WEAPONS,
-  clamp, distance, isSolid, normalizeAngle, spawnCells,
-} from "./config.js?v=20261004-fps-v4";
-import { applyCameraPitch } from "./camera.js?v=20261004-fps-v4";
-import { createShotEvent } from "./shot-geometry.js?v=20261004-fps-v4";
+  BOT_NAMES, DEFAULT_CHARACTER_ID, DEFAULT_CONDITION_ID, GAME_MODES, LOADOUTS, MAPS, TEAM, THROWABLES, WEAPONS,
+  botCharacterId, clamp, createMatchResult, distance, isSolid, normalizeAngle, resolveCharacterId,
+  resolveMatchCondition, spawnCells,
+} from "./config.js?v=20261005-content-v6";
+import { applyCameraPitch } from "./camera.js?v=20261005-content-v6";
+import { createShotEvent } from "./shot-geometry.js?v=20261005-content-v6";
+import {
+  ACTOR_COLLISION_RADIUS, advanceVehicle, collidesWithActor, collidesWithVehicle, createVehicleStates,
+  drivenVehicle, resolveInteractionVehicle, vehicleExitCandidates, vehicleProfile,
+} from "./vehicle-system.js?v=20261005-content-v6";
 
 const TEAMS = [TEAM.SEAL, TEAM.TERROR];
 const randomItem = list => list[Math.floor(Math.random() * list.length)];
@@ -12,7 +17,13 @@ export class GameState {
   constructor(audio, emit = () => {}) {
     this.audio = audio;
     this.emit = emit;
-    this.settings = { mapId: "city", modeId: "4v4", loadoutId: "recon" };
+    this.settings = {
+      mapId: "city",
+      modeId: "4v4",
+      loadoutId: "recon",
+      characterId: DEFAULT_CHARACTER_ID,
+      conditionId: DEFAULT_CONDITION_ID,
+    };
     this.round = 0;
     this.reset();
   }
@@ -26,7 +37,8 @@ export class GameState {
     this.round += 1;
     this.map = MAPS[this.settings.mapId] || MAPS.city;
     this.mode = GAME_MODES[this.settings.modeId] || GAME_MODES["4v4"];
-    this.time = MATCH_TIME;
+    this.rules = resolveMatchCondition(this.settings);
+    this.time = this.rules.timeLimit;
     this.score = { [TEAM.SEAL]: 0, [TEAM.TERROR]: 0 };
     this.finished = false;
     this.started = false;
@@ -37,23 +49,24 @@ export class GameState {
     this.effects = [];
     this.feed = [];
     this.actors = [];
+    this.vehicles = createVehicleStates(this.map);
+    this.syncVehicleAliases();
     this.createTeams();
-    this.tank = {
-      ...this.map.tank,
-      turretAngle: this.map.tank.angle,
-      health: 100,
-      occupied: false,
-      driverId: null,
-      speed: 0,
-      cooldown: 0,
-    };
+  }
+
+  syncVehicleAliases() {
+    this.tank = this.vehicles.find(vehicle => vehicle.type === "tank") || this.vehicles[0];
+    this.armoredCar = this.vehicles.find(vehicle => vehicle.type === "armoredCar") || null;
   }
 
   createTeams() {
     for (const team of TEAMS) {
       const cells = spawnCells(this.map, team);
       for (let index = 0; index < this.mode.teamSize; index += 1) {
-        const [x, y] = cells[(index * 7) % cells.length];
+        const preferred = (index * 7) % cells.length;
+        const [x, y] = Array.from({ length: cells.length }, (_, offset) => cells[(preferred + offset) % cells.length])
+          .find(([cellX, cellY]) => !this.collides(cellX + .5, cellY + .5, ACTOR_COLLISION_RADIUS))
+          || cells[preferred];
         const player = team === TEAM.SEAL && index === 0;
         const loadout = player
           ? LOADOUTS[this.settings.loadoutId] || LOADOUTS.recon
@@ -81,6 +94,7 @@ export class GameState {
           kills: 0,
           deaths: 0,
           damage: 0,
+          characterId: player ? resolveCharacterId(this.settings.characterId) : botCharacterId(team, index),
           loadoutId: loadout.id,
           weaponSlot: "primary",
           weaponId: loadout.primary,
@@ -101,10 +115,11 @@ export class GameState {
     this.hitMarker = Math.max(0, this.hitMarker - dt);
     this.shake = Math.max(0, this.shake - dt * 3);
     this.flash = Math.max(0, this.flash - dt * 3);
-    this.tank.cooldown = Math.max(0, this.tank.cooldown - dt);
+    for (const vehicle of this.vehicles) vehicle.cooldown = Math.max(0, vehicle.cooldown - dt);
     this.player.angle = normalizeAngle(this.player.angle + input.yaw);
     this.player.pitch = applyCameraPitch(this.player.pitch, input.pitch);
-    if (this.tank.driverId === this.player.id) this.tank.turretAngle = this.player.angle;
+    const driven = this.currentVehicle;
+    if (driven) driven.turretAngle = this.player.angle;
 
     for (const action of input.items) this.handleAction(action);
     if (this.player.alive) this.updatePlayer(dt, input.movement, input.fireHeld);
@@ -118,15 +133,16 @@ export class GameState {
 
   handleAction([type, value]) {
     if (!this.player.alive) return;
-    if (type === "weaponSlot" && this.tank.driverId !== this.player.id) this.selectSlot(this.player, value);
-    if (type === "backpack" && this.tank.driverId !== this.player.id) this.cycleLoadout(this.player);
-    if (type === "scope" && this.player.weaponId === "barrett" && this.tank.driverId !== this.player.id) {
+    const driving = Boolean(this.currentVehicle);
+    if (type === "weaponSlot" && !driving) this.selectSlot(this.player, value);
+    if (type === "backpack" && !driving) this.cycleLoadout(this.player);
+    if (type === "scope" && this.player.weaponId === "barrett" && !driving) {
       this.player.scoped = !this.player.scoped;
       this.audio.select();
     }
-    if (type === "grenade" && this.tank.driverId !== this.player.id) this.throwGrenade(this.player);
-    if (type === "interact") this.toggleTank(this.player);
-    if (type === "fire") this.tank.driverId === this.player.id ? this.fireTank(this.player) : this.attack(this.player);
+    if (type === "grenade" && !driving) this.throwGrenade(this.player);
+    if (type === "interact") this.toggleVehicle(this.player, value);
+    if (type === "fire") this.currentVehicle ? this.fireVehicle(this.player) : this.attack(this.player);
   }
 
   selectSlot(actor, slot) {
@@ -155,16 +171,12 @@ export class GameState {
 
   updatePlayer(dt, movement, fireHeld) {
     this.player.cooldown = Math.max(0, this.player.cooldown - dt);
-    if (this.tank.driverId === this.player.id) {
-      const drive = -movement.y;
-      const steer = movement.x;
-      this.tank.speed += (drive * 4.2 - this.tank.speed * 1.8) * dt;
-      this.tank.speed = clamp(this.tank.speed, -1.6, 3.2);
-      this.tank.angle = normalizeAngle(this.tank.angle + steer * dt * (1.15 + Math.abs(this.tank.speed) * .22));
-      this.moveEntity(this.tank, Math.cos(this.tank.angle) * this.tank.speed * dt, Math.sin(this.tank.angle) * this.tank.speed * dt, .62);
-      this.player.x = this.tank.x;
-      this.player.y = this.tank.y;
-      if (fireHeld) this.fireTank(this.player);
+    const vehicle = this.currentVehicle;
+    if (vehicle) {
+      advanceVehicle(vehicle, movement, dt, (dx, dy, radius) => this.moveVehicle(vehicle, dx, dy, radius));
+      this.player.x = vehicle.x;
+      this.player.y = vehicle.y;
+      if (fireHeld) this.fireVehicle(this.player);
       return;
     }
 
@@ -173,7 +185,7 @@ export class GameState {
     const strafe = movement.x;
     const dx = (Math.cos(this.player.angle) * forward + Math.cos(this.player.angle + Math.PI / 2) * strafe) * speed * dt;
     const dy = (Math.sin(this.player.angle) * forward + Math.sin(this.player.angle + Math.PI / 2) * strafe) * speed * dt;
-    this.moveEntity(this.player, dx, dy, .24);
+    this.moveEntity(this.player, dx, dy, ACTOR_COLLISION_RADIUS);
     const weapon = this.currentWeapon;
     if (fireHeld && weapon.automatic) this.attack(this.player);
   }
@@ -185,11 +197,16 @@ export class GameState {
     const spread = actor.scoped && weapon.scopedSpread != null ? weapon.scopedSpread : weapon.spread;
     const victim = this.findTargetInArc(actor, weapon.range, spread);
     if (actor.isPlayer) {
-      if (weapon.visual === "knife" || weapon.visual === "axe") this.audio.knife(weapon.visual);
-      else this.audio.gunshot(weapon.visual);
+      this.audio.weaponShot({ weaponId: weapon.id, profile: weapon.visual, hit: Boolean(victim) });
       this.shake = weapon.visual === "sniper" ? .48 : weapon.visual === "machinegun" ? .24 : .16;
-    } else if (weapon.visual !== "knife" && weapon.visual !== "axe") {
-      this.audio.distantShot(weapon.visual, distance(this.player, actor));
+    } else {
+      this.audio.weaponShot({
+        weaponId: weapon.id,
+        profile: weapon.visual,
+        source: actor,
+        listener: this.player,
+        hit: Boolean(victim),
+      });
     }
     this.commitShot(actor, weapon, victim, weapon.damage);
   }
@@ -219,8 +236,7 @@ export class GameState {
   throwGrenade(actor) {
     if (actor.cooldown > 0) return;
     actor.cooldown = .62;
-    if (actor.isPlayer) this.audio.select();
-    this.projectiles.push({
+    const projectile = {
       type: "grenade",
       throwableId: actor.throwableId,
       x: actor.x + Math.cos(actor.angle) * .45,
@@ -232,49 +248,92 @@ export class GameState {
       life: 1.65,
       owner: actor,
       team: actor.team,
+    };
+    this.projectiles.push(projectile);
+    this.emit("grenade_throw", {
+      type: "grenade_throw",
+      actorId: actor.id,
+      userId: actor.userId ?? null,
+      team: actor.team,
+      throwableId: projectile.throwableId,
+      from: { x: projectile.x, y: projectile.y, z: projectile.z },
+      to: { x: projectile.x + projectile.vx * projectile.life, y: projectile.y + projectile.vy * projectile.life, z: 0 },
     });
   }
 
-  toggleTank(actor) {
-    if (this.tank.driverId === actor.id) {
-      this.tank.driverId = null;
-      this.tank.occupied = false;
-      const side = this.tank.angle + Math.PI / 2;
-      const exit = { x: this.tank.x + Math.cos(side) * 1.1, y: this.tank.y + Math.sin(side) * 1.1 };
-      if (!this.collides(exit.x, exit.y, .24)) Object.assign(actor, exit);
-      if (actor.isPlayer) this.emit("announce", { key: "announce.leftTank" });
-      return;
+  toggleVehicle(actor, requestedId = null) {
+    const active = drivenVehicle(this.vehicles, actor.id);
+    if (active) {
+      const exit = vehicleExitCandidates(active)
+        .find(candidate => !this.collides(candidate.x, candidate.y, ACTOR_COLLISION_RADIUS, active.id)
+          && !this.actors.some(other => other !== actor && other.alive
+            && distance(other, candidate) < ACTOR_COLLISION_RADIUS * 2));
+      if (!exit) return false;
+      active.driverId = null;
+      active.occupied = false;
+      active.speed = 0;
+      Object.assign(actor, exit);
+      if (actor.isPlayer) {
+        this.emit("announce", { key: active.type === "tank" ? "announce.leftTank" : "announce.leftArmoredCar" });
+      }
+      return true;
     }
-    if (!this.tank.driverId && this.tank.health > 0 && distance(actor, this.tank) < 1.65) {
-      this.tank.driverId = actor.id;
-      this.tank.occupied = true;
-      actor.scoped = false;
-      actor.x = this.tank.x;
-      actor.y = this.tank.y;
-      if (actor.isPlayer) this.emit("announce", { key: "announce.startedTank" });
+
+    const vehicle = resolveInteractionVehicle(this.vehicles, actor, requestedId);
+    if (!vehicle) return false;
+    vehicle.driverId = actor.id;
+    vehicle.occupied = true;
+    vehicle.turretAngle = actor.angle;
+    actor.scoped = false;
+    actor.x = vehicle.x;
+    actor.y = vehicle.y;
+    if (actor.isPlayer) {
+      this.emit("announce", { key: vehicle.type === "tank" ? "announce.startedTank" : "announce.startedArmoredCar" });
     }
+    return true;
   }
 
-  fireTank(actor) {
-    if (this.tank.driverId !== actor.id || this.tank.cooldown > 0) return;
-    this.tank.cooldown = .92;
+  fireVehicle(actor) {
+    const vehicle = drivenVehicle(this.vehicles, actor.id);
+    if (!vehicle || vehicle.cooldown > 0) return false;
+    const weapon = vehicleProfile(vehicle).weapon;
+    vehicle.cooldown = weapon.interval;
+    if (weapon.kind === "hitscan") {
+      const victim = this.findTargetInArc(actor, weapon.range, weapon.spread);
+      if (actor.isPlayer) {
+        this.audio.weaponShot({ weaponId: weapon.id, profile: weapon.visual, hit: Boolean(victim) });
+        this.shake = Math.max(this.shake, .22);
+      }
+      this.commitShot(actor, weapon, victim, weapon.damage);
+      return true;
+    }
+
     if (actor.isPlayer) {
       this.audio.tankShot();
       this.shake = 1;
     }
     this.projectiles.push({
       type: "shell",
-      x: this.tank.x + Math.cos(this.tank.turretAngle),
-      y: this.tank.y + Math.sin(this.tank.turretAngle),
+      vehicleId: vehicle.id,
+      weaponId: weapon.id,
+      blastRadius: weapon.blastRadius,
+      damage: weapon.damage,
+      x: vehicle.x + Math.cos(vehicle.turretAngle) * weapon.muzzleOffset,
+      y: vehicle.y + Math.sin(vehicle.turretAngle) * weapon.muzzleOffset,
       z: .65,
-      vx: Math.cos(this.tank.turretAngle) * 13,
-      vy: Math.sin(this.tank.turretAngle) * 13,
+      vx: Math.cos(vehicle.turretAngle) * weapon.projectileSpeed,
+      vy: Math.sin(vehicle.turretAngle) * weapon.projectileSpeed,
       vz: 0,
-      life: 3.2,
+      life: weapon.projectileLife,
       owner: actor,
       team: actor.team,
     });
+    return true;
   }
+
+  toggleTank(actor) { return this.toggleVehicle(actor, this.tank?.id); }
+
+  fireTank(actor) { return this.fireVehicle(actor); }
 
   updateBots(dt) {
     for (const bot of this.actors) {
@@ -311,7 +370,13 @@ export class GameState {
       if (visible && targetDistance < weapon.range && Math.abs(normalizeAngle(Math.atan2(target.y - bot.y, target.x - bot.x) - bot.angle)) < .2 && bot.cooldown <= 0) {
         bot.cooldown = Math.max(.16, weapon.interval * 2.8 + Math.random() * .45);
         const victim = Math.random() < clamp(.78 - targetDistance * .035, .2, .72) ? target : null;
-        if (weapon.visual !== "knife" && weapon.visual !== "axe") this.audio.distantShot(weapon.visual, targetDistance);
+        this.audio.weaponShot({
+          weaponId: weapon.id,
+          profile: weapon.visual,
+          source: bot,
+          listener: this.player,
+          hit: Boolean(victim),
+        });
         this.commitShot(bot, weapon, victim, weapon.damage * .34);
       }
       if (Math.random() < dt * .008 && targetDistance < 10) this.throwGrenade(bot);
@@ -339,28 +404,34 @@ export class GameState {
 
   explode(projectile) {
     const throwable = projectile.type === "shell" ? null : THROWABLES[projectile.throwableId] || THROWABLES.firework;
-    const radius = projectile.type === "shell" ? 4.5 : throwable.radius;
-    const power = projectile.type === "shell" ? 195 : throwable.damage;
+    const radius = projectile.type === "shell" ? projectile.blastRadius || 4.5 : throwable.radius;
+    const power = projectile.type === "shell" ? projectile.damage || 195 : throwable.damage;
     const type = projectile.type === "shell" ? "shell" : throwable.smoke ? "smoke" : throwable.firework ? "firework" : "skull";
     this.effects.push({ x: projectile.x, y: projectile.y, life: type === "smoke" ? 7 : .7, maxLife: type === "smoke" ? 7 : .7, radius, type });
-    this.audio.explosion(type);
+    this.audio.explosion(type, { source: projectile, listener: this.player });
     this.shake = Math.max(this.shake, .78);
     if (!power) return;
     for (const actor of this.actors) {
       if (!actor.alive || actor.team === projectile.team) continue;
       const actorDistance = distance(actor, projectile);
-      if (actorDistance < radius && this.hasClearGeometry(projectile, actor)) this.damage(actor, power * (1 - actorDistance / radius), projectile.owner, projectile.type === "shell" ? "tankCannon" : throwable.id);
+      if (actorDistance < radius && this.hasClearGeometry(projectile, actor)) {
+        this.damage(actor, power * (1 - actorDistance / radius), projectile.owner, projectile.type === "shell" ? projectile.weaponId || "tankCannon" : throwable.id);
+      }
     }
   }
 
   damage(target, amount, attacker, weapon) {
     if (!target.alive || !attacker || target.team === attacker.team) return;
-    if (this.tank.driverId === target.id) {
-      this.tank.health = Math.max(0, this.tank.health - amount * .62);
+    const vehicle = drivenVehicle(this.vehicles, target.id);
+    if (vehicle) {
+      const appliedDamage = Math.min(vehicle.health, amount * vehicleProfile(vehicle).armorScale);
+      vehicle.health = Math.max(0, vehicle.health - appliedDamage);
+      attacker.damage += appliedDamage;
       if (target.isPlayer) this.flash = .35;
-      if (this.tank.health <= 0) {
-        this.tank.driverId = null;
-        this.tank.occupied = false;
+      if (vehicle.health <= 0) {
+        vehicle.driverId = null;
+        vehicle.occupied = false;
+        vehicle.speed = 0;
         target.health = 0;
         this.kill(target, attacker, weapon);
       }
@@ -385,12 +456,16 @@ export class GameState {
     this.feed.unshift(entry);
     this.feed = this.feed.slice(0, 6);
     this.emit("kill", entry);
+    const vehicle = drivenVehicle(this.vehicles, victim.id);
+    if (vehicle) {
+      vehicle.driverId = null;
+      vehicle.occupied = false;
+      vehicle.speed = 0;
+    }
     if (victim.isPlayer) {
-      this.tank.driverId = null;
-      this.tank.occupied = false;
       this.emit("death", { respawn: victim.respawn });
     }
-    if (this.score[attacker.team] >= this.mode.scoreLimit) this.finish(attacker.team);
+    if (this.score[attacker.team] >= this.rules.killTarget) this.finish(attacker.team);
   }
 
   updateRespawns(dt) {
@@ -402,7 +477,9 @@ export class GameState {
   }
 
   respawn(actor) {
-    const [x, y] = randomItem(spawnCells(this.map, actor.team));
+    const cells = spawnCells(this.map, actor.team);
+    const available = cells.filter(([x, y]) => !this.collides(x + .5, y + .5, ACTOR_COLLISION_RADIUS));
+    const [x, y] = randomItem(available.length ? available : cells);
     actor.x = x + .5;
     actor.y = y + .5;
     actor.health = 100;
@@ -416,21 +493,31 @@ export class GameState {
   finish(winner) {
     if (this.finished) return;
     this.finished = true;
-    this.emit("finish", { winner, score: { ...this.score } });
+    this.emit("finish", createMatchResult(this.actors, winner, this.score, this.rules));
   }
 
-  moveEntity(entity, dx, dy, radius) {
+  moveEntity(entity, dx, dy, radius, ignoredVehicleId = null) {
     let moved = false;
-    if (!this.collides(entity.x + dx, entity.y, radius)) { entity.x += dx; moved = moved || Math.abs(dx) > 0; }
-    if (!this.collides(entity.x, entity.y + dy, radius)) { entity.y += dy; moved = moved || Math.abs(dy) > 0; }
+    if (!this.collides(entity.x + dx, entity.y, radius, ignoredVehicleId)) { entity.x += dx; moved = moved || Math.abs(dx) > 0; }
+    if (!this.collides(entity.x, entity.y + dy, radius, ignoredVehicleId)) { entity.y += dy; moved = moved || Math.abs(dy) > 0; }
     return moved;
   }
 
-  collides(x, y, radius) {
+  moveVehicle(vehicle, dx, dy, radius) {
+    const blocked = (x, y) => this.collides(x, y, radius, vehicle.id)
+      || collidesWithActor(this.actors, x, y, radius, vehicle.driverId);
+    let moved = false;
+    if (!blocked(vehicle.x + dx, vehicle.y)) { vehicle.x += dx; moved = moved || Math.abs(dx) > 0; }
+    if (!blocked(vehicle.x, vehicle.y + dy)) { vehicle.y += dy; moved = moved || Math.abs(dy) > 0; }
+    return moved;
+  }
+
+  collides(x, y, radius, ignoredVehicleId = null) {
     return isSolid(this.map, x - radius, y - radius)
       || isSolid(this.map, x + radius, y - radius)
       || isSolid(this.map, x - radius, y + radius)
-      || isSolid(this.map, x + radius, y + radius);
+      || isSolid(this.map, x + radius, y + radius)
+      || collidesWithVehicle(this.vehicles, x, y, radius, ignoredVehicleId);
   }
 
   hasClearGeometry(from, to) {
@@ -456,7 +543,10 @@ export class GameState {
     return true;
   }
 
-  get nearTank() { return !this.tank.occupied && this.tank.health > 0 && distance(this.player, this.tank) < 1.65; }
+  get currentVehicle() { return drivenVehicle(this.vehicles, this.player?.id); }
+  get interactionVehicle() { return this.currentVehicle || resolveInteractionVehicle(this.vehicles, this.player); }
+  get nearVehicle() { return Boolean(this.interactionVehicle); }
+  get nearTank() { return this.nearVehicle; }
   get currentLoadout() { return LOADOUTS[this.player.loadoutId] || LOADOUTS.recon; }
   get currentWeapon() { return WEAPONS[this.player.weaponId] || WEAPONS.ak47; }
   get currentThrowable() { return THROWABLES[this.player.throwableId] || THROWABLES.firework; }

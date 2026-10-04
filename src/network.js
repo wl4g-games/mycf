@@ -44,7 +44,7 @@ export class NetworkClient {
     this.handlers.get(type)?.forEach(handler => handler(payload));
   }
 
-  connectAndRegister(alias, loadoutId) {
+  connectAndRegister(alias, loadoutId, characterId) {
     if (this.connected && this.self) return Promise.resolve(this.self);
     if (this.registerPromise) return this.registerPromise;
     let url;
@@ -70,7 +70,7 @@ export class NetworkClient {
         if (!isCurrent()) return;
         this.connected = true;
         this.emit("status", { connected: true, code: "REGISTERING" });
-        this.send("register", { alias, loadoutId });
+        this.send("register", { alias, loadoutId, characterId });
       });
       socket.addEventListener("message", event => {
         if (!isCurrent()) return;
@@ -130,7 +130,7 @@ export class NetworkClient {
     return true;
   }
 
-  updateProfile(loadoutId) { this.send("update_profile", { loadoutId }); }
+  updateProfile(loadoutId, characterId) { this.send("update_profile", { loadoutId, characterId }); }
   createRoom(settings) { this.send("create_room", settings); }
   invite(targetId) { this.send("invite", { targetId }); }
   respondInvite(roomId, accept) { this.send("respond_invite", { roomId, accept }); }

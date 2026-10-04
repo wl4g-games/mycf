@@ -30,6 +30,7 @@ test("a failed registration cannot let its stale socket corrupt a retry", async 
       this.url = url;
       this.readyState = FakeWebSocket.CONNECTING;
       this.listeners = new Map();
+      this.sent = [];
       FakeWebSocket.instances.push(this);
     }
 
@@ -51,7 +52,7 @@ test("a failed registration cannot let its stale socket corrupt a retry", async 
       this.dispatch("message", { data: JSON.stringify(value) });
     }
 
-    send() {}
+    send(raw) { this.sent.push(JSON.parse(raw)); }
 
     close() {
       this.readyState = FakeWebSocket.CLOSING;
@@ -76,13 +77,17 @@ test("a failed registration cannot let its stale socket corrupt a retry", async 
   });
 
   const client = new NetworkClient();
-  const firstAttempt = client.connectAndRegister("Alpha", "recon");
+  const firstAttempt = client.connectAndRegister("Alpha", "recon", "glamAgentBlack");
   const firstSocket = FakeWebSocket.instances[0];
   firstSocket.open();
+  assert.deepEqual(firstSocket.sent.at(-1), {
+    type: "register",
+    payload: { alias: "Alpha", loadoutId: "recon", characterId: "glamAgentBlack" },
+  });
   firstSocket.message({ type: "error", payload: { code: "ALIAS_TAKEN", message: "Taken" } });
   await assert.rejects(firstAttempt, error => error.code === "ALIAS_TAKEN");
 
-  const secondAttempt = client.connectAndRegister("Bravo", "recon");
+  const secondAttempt = client.connectAndRegister("Bravo", "recon", "cuteSoldier");
   const secondSocket = FakeWebSocket.instances[1];
   secondSocket.open();
   firstSocket.readyState = FakeWebSocket.CLOSED;
@@ -94,4 +99,9 @@ test("a failed registration cannot let its stale socket corrupt a retry", async 
   assert.deepEqual(await secondAttempt, { id: "second", alias: "Bravo" });
   assert.equal(client.connected, true);
   assert.equal(client.self.alias, "Bravo");
+  client.updateProfile("archer", "qipaoAgent");
+  assert.deepEqual(secondSocket.sent.at(-1), {
+    type: "update_profile",
+    payload: { loadoutId: "archer", characterId: "qipaoAgent" },
+  });
 });

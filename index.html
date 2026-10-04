@@ -4,9 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
     <meta name="theme-color" content="#143a57" />
-    <meta name="description" content="Toon Strike is an original cartoon 3D H5 shooter with solo and online multiplayer, two maps, three loadouts, and battles up to 16v16." data-i18n-content="meta.description" />
+    <meta name="description" content="Toon Strike is an original cartoon 3D H5 shooter with solo and online multiplayer, two maps, four loadouts, and battles up to 16v16." data-i18n-content="meta.description" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23ffe15a'/%3E%3Cpath d='M14 20h36v10H38v20H26V30H14z' fill='%23173049'/%3E%3C/svg%3E" />
     <title data-i18n="meta.title">Toon Strike</title>
-    <link rel="stylesheet" href="styles.css?v=20261004-fps-v4" />
+    <link rel="stylesheet" href="styles.css?v=20261005-content-v6" />
   </head>
   <body>
     <main id="game-shell">
@@ -21,7 +22,7 @@
           <p class="eyebrow">CARTOON 3D BROWSER COMBAT · H5</p>
           <h1><span data-i18n="landing.title.top">TOON</span><br /><em data-i18n="landing.title.bottom">STRIKE</em></h1>
           <p class="lead" data-i18n="landing.lead">Join the cheerful firefight in Bubble Harbor or Pinecone Valley. Choose a squad size and loadout, then drive a cartoon tank through the front line.</p>
-          <div class="feature-row"><span data-i18n="landing.feature.maps">2 CARTOON MAPS</span><i></i><span data-i18n="landing.feature.loadouts">3 LOADOUTS</span><i></i><span data-i18n="landing.feature.scale">UP TO 16V16</span></div>
+          <div class="feature-row"><span data-i18n="landing.feature.maps">2 CARTOON MAPS</span><i></i><span data-i18n="landing.feature.loadouts">4 LOADOUTS</span><i></i><span data-i18n="landing.feature.scale">UP TO 16V16</span></div>
         </div>
 
         <aside class="setup-panel">
@@ -50,11 +51,14 @@
 
             <section class="setup-group compact">
               <p><b>03</b> <span data-i18n="setup.mode.prompt">Team size</span></p>
-              <div class="mode-options">
-                <button type="button" class="mode-option" data-mode="1v1"><strong>1V1</strong><small data-i18n="mode.1v1.description">HEAD-TO-HEAD</small></button>
-                <button type="button" class="mode-option selected" data-mode="4v4"><strong>4V4</strong><small data-i18n="mode.4v4.description">TACTICAL SQUAD</small></button>
-                <button type="button" class="mode-option" data-mode="8v8"><strong>8V8</strong><small data-i18n="mode.8v8.description">MEDIUM BATTLE</small></button>
-                <button type="button" class="mode-option" data-mode="16v16"><strong>16V16</strong><small data-i18n="mode.16v16.description">FULL ASSAULT</small></button>
+              <div class="battle-options">
+                <div class="mode-options">
+                  <button type="button" class="mode-option" data-mode="1v1"><strong>1V1</strong><small data-i18n="mode.1v1.description">HEAD-TO-HEAD</small></button>
+                  <button type="button" class="mode-option selected" data-mode="4v4"><strong>4V4</strong><small data-i18n="mode.4v4.description">TACTICAL SQUAD</small></button>
+                  <button type="button" class="mode-option" data-mode="8v8"><strong>8V8</strong><small data-i18n="mode.8v8.description">MEDIUM BATTLE</small></button>
+                  <button type="button" class="mode-option" data-mode="16v16"><strong>16V16</strong><small data-i18n="mode.16v16.description">FULL ASSAULT</small></button>
+                </div>
+                <label class="match-condition"><span data-i18n="setup.condition">Win condition</span><select id="match-condition" aria-label="Win condition" data-i18n-aria-label="setup.condition"></select></label>
               </div>
             </section>
 
@@ -64,6 +68,20 @@
                 <button type="button" class="loadout-option selected" data-loadout="recon"><b>01</b><span><strong data-i18n="loadout.recon.name">LONG-RANGE HUNTER</strong><small data-i18n="loadout.recon.summary">BARRETT · WHITE PISTOL · SWISS KNIFE · SMOKE GRENADE</small></span></button>
                 <button type="button" class="loadout-option" data-loadout="raider"><b>02</b><span><strong data-i18n="loadout.raider.name">BREACH RAIDER</strong><small data-i18n="loadout.raider.summary">AK-47 · BAIKE PISTOL · BATTLE AXE · FIREWORK GRENADE</small></span></button>
                 <button type="button" class="loadout-option" data-loadout="police"><b>03</b><span><strong data-i18n="loadout.police.name">POLICE FIREPOWER</strong><small data-i18n="loadout.police.summary">LOW-RECOIL MG · DUAL PISTOLS · SWISS KNIFE · SKULL GRENADE</small></span></button>
+                <button type="button" class="loadout-option" data-loadout="archer"><b>04</b><span><strong data-i18n="loadout.archer.name">POWER ARCHER</strong><small data-i18n="loadout.archer.summary">POWER BOW · DESERT EAGLE · DUAL BLADES · SMOKE GRENADE</small></span></button>
+              </div>
+            </section>
+
+            <section class="setup-group compact">
+              <p><b>05</b> <span data-i18n="setup.character.prompt">Choose character</span></p>
+              <div class="character-options">
+                <button type="button" class="character-option selected" data-character="maleAgent"><i class="operator" data-character="maleAgent"></i><span><strong data-i18n="character.maleAgent.name">FIELD AGENT</strong><small data-i18n="character.maleAgent.description">ADULT MALE · PROFESSIONAL FIELD OPERATIVE</small></span></button>
+                <button type="button" class="character-option" data-character="glamSoldierBlack"><i class="operator" data-character="glamSoldierBlack"></i><span><strong data-i18n="character.glamSoldierBlack.name">GLAM SOLDIER · BLACK</strong><small data-i18n="character.glamSoldierBlack.description">ADULT FEMALE · PROFESSIONAL BLACK-STOCKING COMBAT KIT</small></span></button>
+                <button type="button" class="character-option" data-character="qipaoSoldier"><i class="operator" data-character="qipaoSoldier"></i><span><strong data-i18n="character.qipaoSoldier.name">QIPAO SOLDIER</strong><small data-i18n="character.qipaoSoldier.description">ADULT FEMALE · RED FLORAL QIPAO · TACTICAL BOOTS</small></span></button>
+                <button type="button" class="character-option" data-character="glamAgentBlack"><i class="operator" data-character="glamAgentBlack"></i><span><strong data-i18n="character.glamAgentBlack.name">GLAM AGENT · BLACK</strong><small data-i18n="character.glamAgentBlack.description">ADULT FEMALE · PROFESSIONAL AGENT · GLASSES · BLACK STOCKINGS · HEELS</small></span></button>
+                <button type="button" class="character-option" data-character="qipaoAgent"><i class="operator" data-character="qipaoAgent"></i><span><strong data-i18n="character.qipaoAgent.name">QIPAO AGENT</strong><small data-i18n="character.qipaoAgent.description">ADULT FEMALE · RED FLORAL QIPAO · GLASSES · HEELS</small></span></button>
+                <button type="button" class="character-option" data-character="cuteSoldier"><i class="operator" data-character="cuteSoldier"></i><span><strong data-i18n="character.cuteSoldier.name">CUTE SOLDIER</strong><small data-i18n="character.cuteSoldier.description">ADULT FEMALE · PROFESSIONAL CHEERFUL TROOPER</small></span></button>
+                <button type="button" class="character-option" data-character="specialForces"><i class="operator" data-character="specialForces"></i><span><strong data-i18n="character.specialForces.name">SPECIAL FORCES</strong><small data-i18n="character.specialForces.description">ADULT MALE · PROFESSIONAL SPECIAL-FORCES OPERATOR</small></span></button>
               </div>
             </section>
 
@@ -78,6 +96,7 @@
             </div>
             <div id="room-console" class="room-console is-hidden">
               <header><span><span data-i18n="lobby.room">ROOM</span> <b id="room-code">------</b></span><small id="room-capacity" data-i18n="lobby.capacity.initial">1 / 8 PLAYERS</small></header>
+              <p id="room-rules" class="room-rules">FIRST TO 20 · 05:00</p>
               <div id="room-members" class="room-members"></div>
               <p class="lobby-label" data-i18n="lobby.invitable">AVAILABLE PLAYERS</p>
               <div id="online-users" class="online-users"></div>
@@ -96,15 +115,24 @@
         <div class="controls-strip">
           <span><kbd>WASD</kbd> <span data-i18n="controls.move">MOVE</span></span><span><kbd>MOUSE</kbd> <span data-i18n="controls.aim">AIM</span></span><span><kbd>LMB</kbd> <span data-i18n="controls.attack">ATTACK</span></span>
           <span><kbd>RMB</kbd> <span data-i18n="controls.scope">SCOPE</span></span><span><kbd>1/2/3</kbd> <span data-i18n="controls.weapons">WEAPONS</span></span><span><kbd>G</kbd> <span data-i18n="controls.throw">THROW</span></span>
-          <span><kbd>B</kbd> <span data-i18n="controls.loadout">LOADOUT</span></span><span><kbd>F</kbd> <span data-i18n="controls.tank">DRIVE TANK</span></span>
+          <span><kbd>B</kbd> <span data-i18n="controls.loadout">LOADOUT</span></span><span><kbd>F</kbd> <span data-i18n="controls.tank">DRIVE VEHICLE</span></span>
         </div>
       </section>
 
       <section id="hud" class="hud is-hidden" aria-live="polite">
         <div class="top-bar">
-          <div class="team-score seals"><span data-i18n="team.seal">BLUE TEAM</span><strong id="seal-score">00</strong></div>
-          <div class="mission-clock"><b id="clock">04:50</b><span id="match-limit">FIRST TO 15 · 4V4</span></div>
-          <div class="team-score tangos"><strong id="terror-score">00</strong><span data-i18n="team.terror">RED TEAM</span></div>
+          <div class="team-score seals">
+            <span data-i18n="team.guardians">GUARDIANS</span>
+            <div><strong id="seal-kills">00</strong><small data-i18n="hud.killsShort">K</small><strong id="seal-deaths">00</strong><small data-i18n="hud.deathsShort">D</small></div>
+          </div>
+          <div class="mission-clock">
+            <b id="clock">05:00</b><span id="match-limit">FIRST TO 20 · 4V4</span>
+            <div class="local-score"><em data-i18n="hud.you">YOU</em><strong id="local-kills">0</strong><small data-i18n="hud.killsShort">K</small><strong id="local-deaths">0</strong><small data-i18n="hud.deathsShort">D</small></div>
+          </div>
+          <div class="team-score tangos">
+            <div><strong id="terror-kills">00</strong><small data-i18n="hud.killsShort">K</small><strong id="terror-deaths">00</strong><small data-i18n="hud.deathsShort">D</small></div>
+            <span data-i18n="team.infiltrators">INFILTRATORS</span>
+          </div>
         </div>
 
         <div class="status-panel">
@@ -160,13 +188,24 @@
         <div class="modal-actions"><button type="button" id="alias-cancel" class="ghost-button" data-i18n="alias.back">BACK</button><button type="button" id="alias-confirm" class="primary-button"><span data-i18n="alias.confirm">CONFIRM AND CONNECT</span></button></div>
       </section>
 
+      <section id="podium-modal" class="podium-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="podium-title">
+        <header><p data-i18n="ranking.kicker">MATCH COMPLETE</p><h2 id="podium-title">AREA SECURED</h2><strong id="podium-result" data-i18n="ranking.guardiansWin">GUARDIANS WIN</strong></header>
+        <div class="podium-score"><b id="podium-seal-score">00</b><span>:</span><b id="podium-terror-score">00</b></div>
+        <p id="podium-local-stats" class="podium-local-stats">YOU · 0 K / 0 D</p>
+        <div id="podium-players" class="podium-players" aria-label="Top three allied players by kills" data-i18n-aria-label="podium.alliedTop"></div>
+        <div class="podium-actions">
+          <button type="button" id="ranking-open" class="ghost-button" data-i18n="ranking.open">VIEW FULL RANKING</button>
+          <button type="button" id="match-end-action" class="primary-button"><span data-i18n="modal.playAgain">PLAY AGAIN</span></button>
+        </div>
+      </section>
+
       <section id="ranking-modal" class="ranking-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="ranking-title">
-        <header><p data-i18n="ranking.kicker">MATCH COMPLETE</p><h2 id="ranking-title" data-i18n="ranking.title">MATCH RANKING</h2><strong id="ranking-result" data-i18n="ranking.blueWins">BLUE TEAM WINS</strong></header>
-        <div class="ranking-score"><span><span data-i18n="team.seal">BLUE TEAM</span> <b id="ranking-seal-score">00</b></span><i>FINAL</i><span><b id="ranking-terror-score">00</b> <span data-i18n="team.terror">RED TEAM</span></span></div>
+        <header><p data-i18n="ranking.kicker">MATCH COMPLETE</p><h2 id="ranking-title" data-i18n="ranking.title">MATCH RANKING</h2><strong id="ranking-result" data-i18n="ranking.guardiansWin">GUARDIANS WIN</strong></header>
+        <div class="ranking-score"><span><span data-i18n="team.guardians">GUARDIANS</span> <b id="ranking-seal-score">00</b></span><i>FINAL</i><span><b id="ranking-terror-score">00</b> <span data-i18n="team.infiltrators">INFILTRATORS</span></span></div>
         <div class="ranking-table-wrap"><table><thead><tr><th>#</th><th data-i18n="ranking.player">PLAYER</th><th data-i18n="ranking.team">TEAM</th><th data-i18n="ranking.kills">KILLS</th><th data-i18n="ranking.deaths">DEATHS</th><th>K/D</th><th data-i18n="ranking.damage">DAMAGE</th><th data-i18n="ranking.points">POINTS</th></tr></thead><tbody id="ranking-body"></tbody></table></div>
-        <button type="button" id="ranking-close" class="primary-button"><span data-i18n="ranking.return">RETURN TO ROOM</span></button>
+        <button type="button" id="ranking-close" class="primary-button"><span data-i18n="ranking.backToPodium">BACK TO PODIUM</span></button>
       </section>
     </main>
-    <script type="module" src="src/main.js?v=20261004-fps-v4"></script>
+    <script type="module" src="src/main.js?v=20261005-content-v6"></script>
   </body>
 </html>

@@ -2,8 +2,8 @@
 
 # Toon Strike · 泡泡战区
 
-**Cartoon squads, two battlefields, and tank combat in your browser.**<br>
-**卡通小队、双重战场与坦克交火，打开浏览器即可开战。**
+**Cartoon squads, two battlefields, and vehicle combat in your browser.**<br>
+**卡通小队、双重战场与载具交火，打开浏览器即可开战。**
 
 <p>
   <a href="https://wl4g-games.github.io/mycf/"><img src="https://img.shields.io/badge/%E2%96%B6%20PLAY%20NOW-%E7%AB%8B%E5%8D%B3%E5%BC%80%E7%8E%A9-2eb9f0?style=for-the-badge" alt="Play Toon Strike · 立即开玩" height="42"></a>
@@ -12,10 +12,10 @@
 </p>
 
 Play in your browser · 打开即玩 · Solo and online · 单机与联机<br>
-Two maps · 两张地图 · Four battle sizes · 四种规模 · Three loadouts · 三套背包 · Up to 16v16 · 最高 16v16
+Two maps · 两张地图 · Four battle sizes · 四种规模 · Four loadouts · 四套背包 · Up to 16v16 · 最高 16v16
 
-**Unlimited firearm ammunition, grenades, and tank shells.**<br>
-**枪械弹药、手雷与坦克炮弹全部无限。**
+**Unlimited firearm ammunition, arrows, grenades, and vehicle rounds.**<br>
+**枪械弹药、箭矢、手雷与载具弹药全部无限。**
 
 </div>
 
@@ -35,16 +35,22 @@ Toon Strike is an original cartoon-style 3D H5 first-person shooter powered by a
   支持 `1v1`、`4v4`、`8v8` 与 `16v16`，每种模式都会保持双方人数平衡，默认仍为 `4v4`。
 - **Two maps · 两张地图：** Fight across the coastal city of Bubble Harbor or the wilderness of Pinecone Valley.<br>
   可在海港都市“泡泡港城”或野外区域“松果山谷”展开战斗。
-- **Three loadouts · 三套背包：** Switch among a Barrett sniper kit, an AK-47 assault kit, and a low-recoil police machine-gun kit.<br>
-  可切换巴雷特狙击套装、AK-47 突击套装与警用低后坐力机枪套装。
-- **Mobile tank combat · 可移动坦克战：** Drive the M-77 tank while aiming its turret independently of the hull and firing on the move.<br>
-  可驾驶 M-77 坦克行进，并让炮塔独立于车体瞄准，在移动中持续开炮。
+- **Four loadouts · 四套背包：** Switch among Barrett, AK-47, police machine-gun, and power-bow kits; the archer carries a Desert Eagle, dual blades, and smoke grenades.<br>
+  可切换巴雷特、AK-47、警用机枪与大力弓箭套装；弓箭背包还包含沙漠之鹰、双刀与烟雾弹。
+- **Two drivable vehicles · 两种可驾驶载具：** Drive the M-77 tank or faster A-12 armored car, aim their turrets independently of the hull, and fire while moving.<br>
+  可驾驶 M-77 坦克或速度更快的 A-12 装甲车，独立控制炮塔，并在移动中开火。
+- **Selectable match conditions · 可选胜利条件：** Choose `10 kills / 3 minutes`, `20 / 5`, `30 / 8`, or `50 / 12`; reaching the kill target or exhausting the paired timer ends the match.<br>
+  可选择 `10 击杀 / 3 分钟`、`20 / 5`、`30 / 8` 或 `50 / 12`；达到击杀目标或用完对应时限都会结束比赛。
+- **Character selection and podium · 角色选择与领奖台：** Choose from two male and five adult female profiles before play. Photoreal portraits appear only in setup and on the breathing podium for the three allied players with the most kills; every live combatant remains a code-drawn cartoon character.<br>
+  开局前可从两名男性与五名成年女性角色中选择。真人图像只出现在选择页与带呼吸动效的我方击杀前三领奖台；正式战斗中的所有角色仍为代码绘制的动画风格。
 - **Multiplayer rooms · 多人房间：** Register a unique callsign, see available online players, create a room, send invitations, accept or decline invitations, and view post-match rankings.<br>
   可注册唯一作战别名、查看可邀请的在线玩家、创建房间、发送邀请、接受或拒绝邀请，并在赛后查看排名。
-- **Weapon-specific audio · 武器专属音效：** Barrett shots, automatic weapons, pistols, melee attacks, grenades, and tank shells use distinct layered sound profiles.<br>
-  巴雷特、自动武器、手枪、近战攻击、手雷与坦克炮均使用彼此不同的分层声音特征。
-- **Classic FPS presentation · 经典第一视角表现：** Every weapon family has its own two-handed viewmodel, movement bob, accepted-shot recoil, muzzle flash, and crosshair flame; scoped Barrett aiming hides the viewmodel.<br>
-  每类武器都有独立的双手第一视角模型、移动起伏、有效开火后坐、枪口焰与准星火焰；巴雷特开镜时会隐藏持枪模型。
+- **Spatial battlefield audio · 立体战场音效：** Distinct layered weapon reports include mechanical and recoil-body tails; nearby footsteps pan left or right, while semantic voice cues warn about incoming and outgoing grenades.<br>
+  不同武器的分层声音包含机械作动与后坐尾音；附近脚步会按方向切换左右声道，系统语音则会提示敌方来雷与我方投雷。
+- **Combat feedback · 战斗反馈：** Every accepted firearm shot produces a visible trajectory beam, while bow shots use a distinct arrow trail; confirmed incoming hits use a red beam and damage flash. The top HUD shows both teams' total kills/deaths and the local player's kills/deaths.<br>
+  每次有效枪械开火都会生成可见弹道光束，弓箭射击则使用独立箭矢轨迹；真正受伤时使用红色光束与受击闪光。屏幕顶部同时展示两队总击杀/阵亡和个人击杀/阵亡。
+- **Classic FPS presentation · 经典第一视角表现：** Every weapon family has its own two-handed viewmodel and movement animation. Firearms add accepted-shot recoil, muzzle flash, and crosshair flame, while bows and melee weapons use dedicated release or swing motion; scoped Barrett aiming hides the viewmodel.<br>
+  每类武器都有独立的双手第一视角模型与移动动画。枪械具备有效开火后坐、枪口焰与准星火焰，弓箭和近战武器则使用独立的释放或挥击动作；巴雷特开镜时会隐藏持枪模型。
 - **Independent touch controls · 双手独立触控：** The left thumb moves while the right thumb can hold FIRE and drag to aim in the same gesture, with cancellation-safe multi-touch tracking.<br>
   左手拇指负责移动，右手拇指可在按住开火的同时拖动瞄准，并通过安全的多触点跟踪处理系统中断。
 - **Animated combatants · 动态战斗角色：** Teammates and enemies use movement-derived alternating leg strides instead of sliding across the map.<br>
@@ -61,10 +67,11 @@ Toon Strike is an original cartoon-style 3D H5 first-person shooter powered by a
 | Loadout 01 · 背包 01 | Long-range Hunter · 远程猎手 | Barrett M82A1 · White Pistol · Swiss Knife · Smoke Grenade<br>巴雷特 M82A1 · 白壳手枪 · 瑞士军刀 · 烟雾弹 |
 | Loadout 02 · 背包 02 | Breach Raider · 突击破阵 | AK-47 · Baike Pistol · Battle Axe · Firework Grenade<br>AK-47 · 白克手枪 · 战斧 · 烟花手雷 |
 | Loadout 03 · 背包 03 | Police Firepower · 警用火力 | Police M7 · Dual Pistols · Swiss Knife · Skull Grenade<br>警用 M7 机枪 · 双持小手枪 · 瑞士军刀 · 骷髅手雷 |
+| Loadout 04 · 背包 04 | Power Archer · 强弓游侠 | Power Bow · Desert Eagle · Dual Blades · Smoke Grenade<br>大力弓箭 · 沙漠之鹰 · 双刀 · 烟雾弹 |
 
-All firearms, grenades, and tank shells have unlimited ammunition; the loadouts differ by damage, fire rate, range, recoil profile, and combat role.
+All firearms, arrows, grenades, and vehicle rounds have unlimited ammunition; the loadouts differ by damage, fire rate, range, recoil profile, and combat role.
 
-所有枪械、手雷与坦克炮弹均为无限备弹；不同背包通过伤害、射速、射程、后坐力特征与战斗定位形成差异。
+所有枪械、箭矢、手雷与载具弹药均为无限备弹；不同背包通过伤害、射速、射程、后坐力特征与战斗定位形成差异。
 
 ## How to play · 操作方式
 
@@ -77,12 +84,12 @@ All firearms, grenades, and tank shells have unlimited ammunition; the loadouts 
 | Select weapon · 选择武器 | `1 / 2 / 3` | Keyboard only · 仅键盘支持 |
 | Throw grenade · 投掷手雷 | `G` | Grenade button · 手雷按钮 |
 | Switch loadout · 切换背包 | `B` | Loadout button · 背包按钮 |
-| Enter or leave tank · 进入或离开坦克 | `F` | `F` button · `F` 按钮 |
+| Enter or leave vehicle · 进入或离开载具 | `F` | `F` button · `F` 按钮 |
 | Pause · 暂停 | `Esc` | Not available · 暂不支持 |
 
-The Barrett supports an 8× scope, the tank can move and fire simultaneously, and the active loadout can be changed during a match while the player is on foot.
+The Barrett supports an 8× scope, both vehicles can move and fire simultaneously, and the active loadout can be changed during a match while the player is on foot.
 
-巴雷特支持 8 倍瞄准镜，坦克能够边移动边开火，并且玩家步行作战时可在比赛中切换当前作战背包。
+巴雷特支持 8 倍瞄准镜，两种载具都能够边移动边开火，并且玩家步行作战时可在比赛中切换当前作战背包。
 
 ## Online flow · 网络对战流程
 
@@ -194,8 +201,8 @@ Vercel 会把 `Dockerfile.vercel` 构建到其自有的 Vercel Container Registr
 Vercel can place WebSocket clients on different Function instances and can recycle an instance at its duration limit. A public deployment therefore needs durable room and match coordination through Redis plus client reconnection. The current in-memory runtime is suitable only for local single-process development; even a Vercel Preview deployment does not guarantee correct multiplayer routing or recovery.<br>
 Vercel 可能把 WebSocket 客户端分配到不同的 Function 实例，也可能在运行时限到达后回收实例。因此公开部署需要使用 Redis 持久协调房间与比赛状态，并在客户端实现断线重连。当前纯内存运行时仅适合本地单进程开发；即使是 Vercel Preview 部署，也无法保证多人路由与恢复行为正确。
 
-Each match has a 290-second time limit and may end earlier when a team reaches the score limit; the WebSocket Function is capped at 300 seconds. Vercel measures that cap from the initial socket connection, not from match start, so time spent registering, inviting, or waiting in a room consumes the same limit; the 10-second numerical margin alone cannot guarantee a complete match.<br>
-每局比赛时限为 290 秒，并可在一方达到得分上限时提前结束；WebSocket Function 上限为 300 秒。Vercel 从首次建立连接时开始计算时限，而不是从比赛开始时计算，因此注册、邀请与房间等待都会消耗同一时限；仅有数值上的 10 秒余量无法保证完成整局比赛。
+The four match presets cap active play at 180, 300, 480, or 720 seconds and may end earlier at their paired kill target. Vercel measures a Function's duration from the initial socket connection, so registration and lobby time consume the same allowance. Fluid compute defaults to 300 seconds; Hobby cannot exceed 300, while paid plans must explicitly allow at least 800 seconds for the longer presets. Reconnection and durable shared state are still required for reliable public matches.<br>
+四种比赛预设的有效作战上限分别为 180、300、480 与 720 秒，并可在达到对应击杀目标时提前结束。Vercel 从首次建立 Socket 时开始计算 Function 时限，因此注册与大厅等待也会占用同一限额。Fluid compute 默认为 300 秒；Hobby 无法超过 300 秒，付费计划需为长时限预设显式配置至少 800 秒。可靠的公开比赛仍需断线恢复与持久化共享状态。
 
 After a stable production endpoint is ready, set the repository variable below. Pull request and release builds pass it to Vite, allowing the GitHub Pages frontend to open a cross-origin WSS connection without hard-coding a deployment domain.<br>
 稳定的生产端点准备就绪后，请设置下方仓库变量。Pull Request 与发布构建会把它传给 Vite，使 GitHub Pages 前端无需硬编码部署域名即可建立跨域 WSS 连接。
@@ -244,8 +251,8 @@ The detailed versioning and pipeline rules are documented in [CI/CD Architecture
   GitHub Pages 继续作为文档顶部的体验链接，也是 CI 唯一部署的前端；配置托管多人端点后，它会通过 `VITE_MYCF_WS_URL` 使用网络模式。
 - **Independent Vercel service · 独立 Vercel 服务：** Vercel receives only the `ws-server` container project, builds `Dockerfile.vercel` into VCR, and never receives the Vite frontend or `dist/` artifact; Fluid compute must remain enabled.<br>
   Vercel 只接收 `ws-server` 容器项目，把 `Dockerfile.vercel` 构建到 VCR，绝不接收 Vite 前端或 `dist/` 制品；Fluid compute 必须保持启用。
-- **Bounded match · 有限局时：** The authoritative server and both solo and online clients use the same 290-second maximum match time, with score-limit victories allowed earlier.<br>
-  权威服务端、单机客户端与网络客户端统一使用 290 秒最大比赛时限，并允许达到得分上限时提前获胜。
+- **Bounded match · 有限局时：** The authoritative server and both solo and online clients share the same four kill-target/time-limit presets: `10/3m`, `20/5m`, `30/8m`, and `50/12m`.<br>
+  权威服务端、单机客户端与网络客户端共用四组击杀目标/时限预设：`10/3 分钟`、`20/5 分钟`、`30/8 分钟` 与 `50/12 分钟`。
 - **Durable multiplayer state · 持久多人状态：** Public scale-out must not rely on Function memory for aliases, presence, invitations, rooms, or authoritative matches.<br>
   公开扩容时，别名、在线状态、邀请、房间与服务器权威比赛均不得只依赖 Function 内存。
 - **Browser origins · 浏览器来源：** The server accepts the GitHub Pages origin, same-origin deployments, and local development by default; additional trusted origins use `MYCF_ALLOWED_ORIGINS`.<br>

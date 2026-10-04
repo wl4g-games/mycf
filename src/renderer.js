@@ -1,8 +1,11 @@
-import { FOV, MAPS, SCOPED_FOV, TEAM, THROWABLES, clamp, normalizeAngle, tileAt } from "./config.js?v=20261004-fps-v4";
-import { MotionTracker, gaitPose } from "./render-animation.js?v=20261004-fps-v4";
-import { WeaponViewmodel } from "./weapon-viewmodel.js?v=20261004-fps-v4";
-import { cameraHorizon } from "./camera.js?v=20261004-fps-v4";
-import { CombatTracerSystem } from "./combat-tracer.js?v=20261004-fps-v4";
+import {
+  CHARACTER_PROFILES, DEFAULT_CHARACTER_ID, FOV, MAPS, SCOPED_FOV, TEAM, THROWABLES,
+  clamp, normalizeAngle, resolveCharacterId, tileAt,
+} from "./config.js?v=20261005-content-v6";
+import { MotionTracker, gaitPose } from "./render-animation.js?v=20261005-content-v6";
+import { WeaponViewmodel } from "./weapon-viewmodel.js?v=20261005-content-v6";
+import { cameraHorizon } from "./camera.js?v=20261005-content-v6";
+import { CombatTracerSystem } from "./combat-tracer.js?v=20261005-content-v6";
 
 const TEAM_COLORS = {
   seal: { main: "#2ca9df", shade: "#155d91", light: "#75dcff", gear: "#17394f" },
@@ -33,6 +36,20 @@ const hash = (x, y) => {
   const value = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
   return value - Math.floor(value);
 };
+
+export function getVehicleRenderState(game) {
+  const vehicles = game.vehicles || (game.tank ? [game.tank] : []);
+  const ownVehicle = vehicles.find(vehicle => vehicle.driverId === game.player?.id) || null;
+  return {
+    vehicles,
+    ownVehicle,
+    driverIds: new Set(vehicles.map(vehicle => vehicle.driverId).filter(Boolean)),
+  };
+}
+
+export function getActorRenderProfile(characterId) {
+  return CHARACTER_PROFILES[resolveCharacterId(characterId)] || CHARACTER_PROFILES[DEFAULT_CHARACTER_ID];
+}
 
 export class Renderer {
   constructor(canvas, radar) {
@@ -272,13 +289,15 @@ export class Renderer {
   }
 
   drawWorldSprites(game, focal, horizon, fov) {
-    const ownDriving = game.tank.driverId === game.player.id;
+    const { vehicles, ownVehicle, driverIds: vehicleDrivers } = getVehicleRenderState(game);
     const sprites = [
-      ...game.actors.filter(actor => actor.alive && !actor.isPlayer && actor.id !== game.tank.driverId).map(actor => ({ ...actor, kind: "actor" })),
+      ...game.actors.filter(actor => actor.alive && !actor.isPlayer && !vehicleDrivers.has(actor.id)).map(actor => ({ ...actor, kind: "actor" })),
       ...game.projectiles.map(projectile => ({ ...projectile, kind: projectile.type })),
       ...game.effects.map(effect => ({ ...effect, kind: "effect" })),
     ];
-    if (!ownDriving) sprites.push({ ...game.tank, kind: "tank" });
+    for (const vehicle of vehicles) {
+      if (vehicle !== ownVehicle && vehicle.health > 0) sprites.push({ ...vehicle, kind: vehicle.type });
+    }
     const projected = sprites
       .map(sprite => ({ sprite, ...this.project(sprite, game.player, focal, horizon) }))
       .filter(item => item.forward > .15 && Math.abs(item.delta) < fov * .92)
@@ -290,6 +309,7 @@ export class Renderer {
       this.context.save();
       if (item.sprite.kind === "actor") this.drawActor(item);
       if (item.sprite.kind === "tank") this.drawTank(item);
+      if (item.sprite.kind === "armoredCar") this.drawArmoredCar(item);
       if (item.sprite.kind === "grenade" || item.sprite.kind === "shell") this.drawProjectile(item);
       if (item.sprite.kind === "effect") this.drawEffect(item);
       this.context.restore();
@@ -333,12 +353,16 @@ export class Renderer {
     const target = this.tracerCameraPoint(trace.to, player);
     if (trace.actorId === player.id) {
       if (target.forward <= near) return null;
-      const muzzle = this.weaponViewmodel.muzzlePosition(
-        game,
-        this.width,
-        this.height,
-        this.motionTracker.get(player.id),
-      );
+      const driven = game.currentVehicle
+        || (game.vehicles || (game.tank ? [game.tank] : [])).find(vehicle => vehicle.driverId === player.id);
+      const muzzle = driven
+        ? { x: this.width * .53, y: this.height * .62 }
+        : this.weaponViewmodel.muzzlePosition(
+          game,
+          this.width,
+          this.height,
+          this.motionTracker.get(player.id),
+        );
       return {
         start: muzzle || { x: this.width / 2, y: this.height / 2 },
         end: this.projectTracerPoint(target, focal, horizon),
@@ -386,23 +410,24 @@ export class Renderer {
       if (!segment) continue;
       const alpha = clamp(trace.life / trace.maxLife, 0, 1);
       const gradient = ctx.createLinearGradient(segment.start.x, segment.start.y, segment.end.x, segment.end.y);
-      gradient.addColorStop(0, "rgba(255,247,177,.96)");
-      gradient.addColorStop(.62, "rgba(255,181,64,.94)");
-      gradient.addColorStop(1, trace.incomingHit ? "rgba(255,47,74,.98)" : "rgba(255,112,49,.9)");
+      const bow = trace.profile === "bow";
+      gradient.addColorStop(0, bow ? "rgba(227,255,244,.98)" : "rgba(255,247,177,.96)");
+      gradient.addColorStop(.62, bow ? "rgba(91,235,203,.94)" : "rgba(255,181,64,.94)");
+      gradient.addColorStop(1, trace.incomingHit ? "rgba(255,47,74,.98)" : bow ? "rgba(49,179,165,.9)" : "rgba(255,112,49,.9)");
       ctx.save();
       ctx.lineCap = "round";
       ctx.globalAlpha = alpha;
       ctx.strokeStyle = gradient;
-      ctx.shadowColor = trace.incomingHit ? "#ff304f" : "#ffb238";
-      ctx.shadowBlur = trace.profile === "sniper" ? 18 : 11;
-      ctx.lineWidth = trace.profile === "sniper" ? 7 : 4.5;
+      ctx.shadowColor = trace.incomingHit ? "#ff304f" : bow ? "#55e8cf" : "#ffb238";
+      ctx.shadowBlur = trace.profile === "sniper" ? 18 : bow ? 8 : 11;
+      ctx.lineWidth = trace.profile === "sniper" ? 7 : bow ? 3 : 4.5;
       ctx.beginPath();
       ctx.moveTo(segment.start.x, segment.start.y);
       ctx.lineTo(segment.end.x, segment.end.y);
       ctx.stroke();
       ctx.shadowBlur = 0;
       ctx.strokeStyle = "rgba(255,255,231,.98)";
-      ctx.lineWidth = trace.profile === "sniper" ? 2.2 : 1.35;
+      ctx.lineWidth = trace.profile === "sniper" ? 2.2 : bow ? 1 : 1.35;
       ctx.stroke();
       if (trace.incomingHit) this.drawInjuryImpact(segment.end, alpha);
       ctx.restore();
@@ -428,7 +453,12 @@ export class Renderer {
   drawActor({ sprite, x, ground, unit, forward }) {
     const ctx = this.context;
     const colors = TEAM_COLORS[sprite.team] || TEAM_COLORS.terror;
-    const scale = unit * .98;
+    const profile = getActorRenderProfile(sprite.characterId);
+    const scale = unit * .98 * profile.scale;
+    const torsoWidth = profile.torsoWidth;
+    const shoulder = .33 * profile.shoulderScale;
+    const headWidth = .19 * profile.headScale;
+    const headHeight = .2 * profile.headScale;
     const motion = gaitPose(this.motionTracker.get(sprite.id));
     const idlePhase = this.animationTime * 2 + (Number(sprite.index) || 0) * 1.7;
     const bob = (Math.sin(idlePhase) * .004 - motion.bounce * .026) * scale;
@@ -449,48 +479,64 @@ export class Renderer {
     this.drawActorLeg(ctx, -.12, -.39, motion.left * .52, colors.shade);
     this.drawActorLeg(ctx, .12, -.39, motion.right * .52, colors.main);
 
-    roundedPath(ctx, -.3, -.82, .6, .48, .14);
+    if (profile.helmet === "tactical" || profile.helmet === "round") {
+      roundedPath(ctx, -torsoWidth * .6, -.77, torsoWidth * 1.2, .33, .12);
+      ctx.fillStyle = colors.gear;
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    roundedPath(ctx, -torsoWidth / 2, -.82, torsoWidth, .48, .14);
     ctx.fillStyle = colors.main;
     ctx.fill();
     ctx.stroke();
-    roundedPath(ctx, -.25, -.74, .5, .31, .08);
+    roundedPath(ctx, -torsoWidth / 2 + .05, -.74, torsoWidth - .1, .31, .08);
     ctx.fillStyle = colors.gear;
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = colors.light;
-    ctx.fillRect(-.19, -.7, .38, .055);
+    ctx.fillStyle = profile.accent;
+    ctx.fillRect(-torsoWidth * .32, -.7, torsoWidth * .64, .055);
     ctx.fillStyle = "rgba(255,255,255,.22)";
-    ctx.fillRect(-.2, -.59, .1, .11);
-    ctx.fillRect(.1, -.59, .1, .11);
+    ctx.fillRect(-torsoWidth * .33, -.59, .1, .11);
+    ctx.fillRect(torsoWidth * .33 - .1, -.59, .1, .11);
 
-    this.fillStrokeCapsule(ctx, -.42, -.72, .18, .4, .08, colors.shade, -.22);
-    this.fillStrokeCapsule(ctx, .24, -.72, .18, .4, .08, colors.main, .18);
+    this.fillStrokeCapsule(ctx, -shoulder - .09, -.72, .18, .4, .08, colors.shade, -.22);
+    this.fillStrokeCapsule(ctx, shoulder - .09, -.72, .18, .4, .08, colors.main, .18);
     ctx.fillStyle = "#243644";
     ctx.beginPath();
-    ctx.arc(-.34, -.36, .085, 0, Math.PI * 2);
-    ctx.arc(.34, -.36, .085, 0, Math.PI * 2);
+    ctx.arc(-shoulder, -.36, .085, 0, Math.PI * 2);
+    ctx.arc(shoulder, -.36, .085, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = "#f4b27b";
+    ctx.fillStyle = profile.skinTone;
     ctx.beginPath();
-    ctx.ellipse(0, -.98, .19, .2, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, -.98, headWidth, headHeight, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = colors.gear;
+    ctx.fillStyle = profile.helmet === "visor" ? profile.hairColor : colors.gear;
     ctx.beginPath();
-    ctx.arc(0, -1.03, .225, Math.PI, Math.PI * 2);
-    ctx.lineTo(.2, -.95);
-    ctx.quadraticCurveTo(0, -.87, -.2, -.95);
+    const helmetWidth = headWidth + (profile.helmet === "tactical" ? .07 : .035);
+    ctx.arc(0, -1.03, helmetWidth, Math.PI, Math.PI * 2);
+    ctx.lineTo(headWidth + .01, -.95);
+    ctx.quadraticCurveTo(0, -.87, -headWidth - .01, -.95);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = "#bdefff";
-    roundedPath(ctx, -.15, -1.02, .3, .085, .04);
+    if (profile.helmet === "tactical") {
+      ctx.fillStyle = colors.gear;
+      ctx.beginPath();
+      ctx.arc(-helmetWidth, -.98, .055, 0, Math.PI * 2);
+      ctx.arc(helmetWidth, -.98, .055, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.fillStyle = profile.helmet === "visor" ? profile.accent : "#bdefff";
+    roundedPath(ctx, -headWidth * .8, -1.02, headWidth * 1.6, .085, .04);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = colors.main;
-    roundedPath(ctx, -.16, -.955, .32, .105, .04);
+    ctx.fillStyle = profile.helmet === "round" ? profile.accent : colors.main;
+    roundedPath(ctx, -headWidth * .84, -.955, headWidth * 1.68, .105, .04);
     ctx.fill();
     ctx.stroke();
 
@@ -608,6 +654,79 @@ export class Renderer {
     }
   }
 
+  drawArmoredCar({ sprite, x, ground, unit, forward }) {
+    const ctx = this.context;
+    const width = unit * 1.55;
+    const height = unit * .78;
+    const top = ground - height;
+    ctx.globalAlpha = clamp(1.15 - forward / 38, .3, 1);
+    ctx.fillStyle = "rgba(19,31,42,.38)";
+    ctx.beginPath();
+    ctx.ellipse(x, ground, width * .54, height * .13, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineJoin = "round";
+    ctx.lineWidth = Math.max(2, unit * .04);
+    ctx.strokeStyle = "#172f43";
+
+    for (const side of [-1, 1]) {
+      ctx.fillStyle = "#203743";
+      ctx.beginPath();
+      ctx.arc(x + side * width * .34, top + height * .82, height * .17, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#74d8dc";
+      ctx.beginPath();
+      ctx.arc(x + side * width * .34, top + height * .82, height * .065, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = "#347d91";
+    roundedPath(ctx, x - width * .5, top + height * .39, width, height * .46, height * .12);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#58b9bd";
+    ctx.beginPath();
+    ctx.moveTo(x - width * .3, top + height * .42);
+    ctx.lineTo(x - width * .17, top + height * .16);
+    ctx.lineTo(x + width * .25, top + height * .16);
+    ctx.lineTo(x + width * .39, top + height * .42);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#bceff1";
+    roundedPath(ctx, x - width * .12, top + height * .21, width * .25, height * .15, height * .035);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#286272";
+    ctx.beginPath();
+    ctx.arc(x, top + height * .18, height * .16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    const gunAngle = normalizeAngle(sprite.turretAngle - sprite.angle);
+    const gunX = Math.sin(gunAngle) * width * .24;
+    ctx.strokeStyle = "#203c49";
+    ctx.lineWidth = Math.max(3, unit * .065);
+    ctx.beginPath();
+    ctx.moveTo(x, top + height * .14);
+    ctx.lineTo(x + gunX, top - height * .2);
+    ctx.stroke();
+    ctx.fillStyle = "#ffe36a";
+    ctx.beginPath();
+    ctx.arc(x - width * .35, top + height * .54, height * .055, 0, Math.PI * 2);
+    ctx.arc(x + width * .35, top + height * .54, height * .055, 0, Math.PI * 2);
+    ctx.fill();
+    if (forward < 10) {
+      ctx.fillStyle = "#dffcff";
+      ctx.font = `900 ${Math.max(8, unit * .11)}px system-ui`;
+      ctx.textAlign = "center";
+      ctx.strokeStyle = "#17304a";
+      ctx.lineWidth = 3;
+      ctx.strokeText("A-12", x, top - height * .14);
+      ctx.fillText("A-12", x, top - height * .14);
+    }
+  }
+
   drawProjectile({ sprite, x, ground, unit }) {
     const ctx = this.context;
     const z = sprite.z == null ? .2 : sprite.z;
@@ -675,7 +794,9 @@ export class Renderer {
 
   drawWeapon(game) {
     if (!game.player.alive) return;
-    if (game.tank.driverId === game.player.id) { this.drawTankCockpit(game); return; }
+    const vehicle = game.currentVehicle
+      || (game.vehicles || (game.tank ? [game.tank] : [])).find(item => item.driverId === game.player.id);
+    if (vehicle) { this.drawVehicleCockpit(vehicle); return; }
     this.weaponViewmodel.draw(
       this.context,
       game,
@@ -685,23 +806,28 @@ export class Renderer {
     );
   }
 
-  drawTankCockpit(game) {
+  drawVehicleCockpit(vehicle) {
     const ctx = this.context;
     const width = this.width;
     const height = this.height;
-    ctx.fillStyle = "#294e49";
+    const armoredCar = vehicle.type === "armoredCar";
+    ctx.fillStyle = armoredCar ? "#24576a" : "#294e49";
     ctx.strokeStyle = "#142d39";
     ctx.lineWidth = Math.max(5, height * .01);
     ctx.beginPath();
-    ctx.moveTo(0, height); ctx.lineTo(width * .14, height * .72); ctx.lineTo(width * .4, height * .64); ctx.lineTo(width * .6, height * .64); ctx.lineTo(width * .86, height * .72); ctx.lineTo(width, height); ctx.closePath();
+    const edgeY = armoredCar ? .78 : .72;
+    const dashY = armoredCar ? .7 : .64;
+    ctx.moveTo(0, height); ctx.lineTo(width * .14, height * edgeY); ctx.lineTo(width * .4, height * dashY); ctx.lineTo(width * .6, height * dashY); ctx.lineTo(width * .86, height * edgeY); ctx.lineTo(width, height); ctx.closePath();
     ctx.fill(); ctx.stroke();
-    ctx.fillStyle = "#7bd266";
-    roundedPath(ctx, width * .39, height * .69, width * .22, height * .18, height * .04); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = "#d7e85e";
+    ctx.fillStyle = armoredCar ? "#4da6b5" : "#7bd266";
+    roundedPath(ctx, width * .39, height * (armoredCar ? .75 : .69), width * .22, height * .18, height * .04); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = armoredCar ? "#bff8ff" : "#d7e85e";
     ctx.font = `900 ${height * .04}px system-ui`;
     ctx.textAlign = "center";
-    ctx.fillText(Math.round(Math.abs(game.tank.speed) * 31).toString().padStart(3, "0"), width * .5, height * .79);
+    ctx.fillText(Math.round(Math.abs(vehicle.speed) * 31).toString().padStart(3, "0"), width * .5, height * (armoredCar ? .85 : .79));
   }
+
+  drawTankCockpit(game) { this.drawVehicleCockpit(game.tank); }
 
   drawRadar(game) {
     const ctx = this.radarContext;
@@ -730,8 +856,11 @@ export class Renderer {
       ctx.arc(offsetX + actor.x * scale, offsetY + actor.y * scale, actor.isPlayer ? 3.6 : 2.4, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.fillStyle = "#ffdf5f";
-    ctx.fillRect(offsetX + game.tank.x * scale - 2.5, offsetY + game.tank.y * scale - 2.5, 5, 5);
+    for (const vehicle of (game.vehicles || (game.tank ? [game.tank] : [])).filter(item => item.health > 0)) {
+      ctx.fillStyle = vehicle.type === "armoredCar" ? "#6ce9ff" : "#ffdf5f";
+      const size = vehicle.type === "armoredCar" ? 4 : 5;
+      ctx.fillRect(offsetX + vehicle.x * scale - size / 2, offsetY + vehicle.y * scale - size / 2, size, size);
+    }
     ctx.strokeStyle = "rgba(255,255,255,.35)";
     ctx.strokeRect(offsetX, offsetY, mapWidth * scale, mapHeight * scale);
   }

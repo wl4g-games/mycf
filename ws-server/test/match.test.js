@@ -14,10 +14,10 @@ test("1v1 creates one actor per team and assigns two players to opposing sides",
     () => {},
   );
   assert.equal(match.actors.length, 2);
-  assert.equal(match.time, 290);
+  assert.equal(match.time, 300);
   assert.equal(match.actors.filter(actor => actor.isBot).length, 0);
   assert.deepEqual(members.map(member => match.assignmentFor(member.id).team), ["seal", "terror"]);
-  assert.equal(match.mode.scoreLimit, 10);
+  assert.deepEqual(match.rules, { id: "standard", killTarget: 20, timeLimit: 300 });
 });
 
 test("an underfilled 4v4 match creates balanced AI replacements and rankings", () => {
@@ -71,7 +71,7 @@ test("16v16 creates 32 actors and alternates human team assignments", () => {
   assert.equal(match.actors.filter(actor => actor.isBot).length, 27);
 });
 
-test("the authoritative match deadline remains 290 wall-clock seconds during delayed ticks", () => {
+test("the authoritative standard condition remains 300 wall-clock seconds during delayed ticks", () => {
   let now = 1000;
   let finished = null;
   const match = new AuthoritativeMatch(
@@ -82,7 +82,7 @@ test("the authoritative match deadline remains 290 wall-clock seconds during del
     { now: () => now },
   );
 
-  now += 289000;
+  now += 299000;
   match.update(.05);
   assert.equal(match.time, 1);
   assert.equal(finished, null);
@@ -91,4 +91,128 @@ test("the authoritative match deadline remains 290 wall-clock seconds during del
   match.update(.05);
   assert.equal(match.time, 0);
   assert.ok(finished);
+});
+
+test("the authoritative kill target comes only from a recognized condition id", () => {
+  let finished = null;
+  const match = new AuthoritativeMatch(
+    { id: "RULE01", mapId: "city", modeId: "1v1", conditionId: "blitz", killTarget: 1, timeLimit: 1 },
+    [{ id: "rule-user", alias: "Rules", loadoutId: "recon" }],
+    () => {},
+    result => { finished = result; },
+  );
+  const attacker = match.actors.find(actor => actor.team === "seal");
+  const victim = match.actors.find(actor => actor.team === "terror");
+  match.score.seal = 9;
+  match.kill(victim, attacker, "barrett");
+
+  assert.ok(finished);
+  assert.deepEqual(
+    { conditionId: finished.conditionId, killTarget: finished.killTarget, timeLimit: finished.timeLimit },
+    { conditionId: "blitz", killTarget: 10, timeLimit: 180 },
+  );
+});
+
+test("a targeted armored-car interaction tolerates bounded latency and fires its machine gun", () => {
+  const events = [];
+  const match = new AuthoritativeMatch(
+    { id: "CAR001", mapId: "city", modeId: "1v1" },
+    [{ id: "driver-1", alias: "Driver", loadoutId: "archer" }],
+    event => events.push(event),
+    () => {},
+  );
+  const actor = match.actorByUser.get("driver-1");
+  const vehicle = match.armoredCar;
+  actor.x = vehicle.x + 2.2;
+  actor.y = vehicle.y;
+  actor.angle = vehicle.angle;
+
+  match.setInput("driver-1", {
+    movement: { x: 0, y: -1 },
+    angle: vehicle.angle,
+    fireHeld: true,
+    actions: [["interact", vehicle.id]],
+  });
+  match.update(.05);
+
+  assert.equal(vehicle.driverId, actor.id);
+  assert.equal(match.tank.driverId, null);
+  assert.equal(match.projectiles.some(projectile => projectile.type === "shell"), false);
+  assert.equal(events.some(event => event.type === "shot" && event.weaponId === "armoredMG"), true);
+  const snapshot = match.snapshotFor("driver-1");
+  assert.equal(snapshot.vehicles.length, 2);
+  assert.equal(snapshot.vehicles.find(item => item.id === vehicle.id).driverId, actor.id);
+  assert.equal(snapshot.tank.id, match.tank.id);
+});
+
+test("invalid remote vehicle targets cannot enter a different nearby vehicle", () => {
+  const match = new AuthoritativeMatch(
+    { id: "CAR002", mapId: "city", modeId: "1v1" },
+    [{ id: "driver-1", alias: "Driver", loadoutId: "recon" }],
+    () => {},
+    () => {},
+  );
+  const actor = match.actorByUser.get("driver-1");
+  actor.x = match.tank.x;
+  actor.y = match.tank.y;
+
+  assert.equal(match.toggleVehicle(actor, "missing-vehicle"), false);
+  assert.equal(match.tank.driverId, null);
+});
+
+test("vehicle exit and pedestrian collision select a safe deterministic side", () => {
+  const match = new AuthoritativeMatch(
+    { id: "EXIT01", mapId: "city", modeId: "1v1" },
+    [{ id: "driver-1", alias: "Driver", loadoutId: "recon" }],
+    () => {},
+    () => {},
+  );
+  const actor = match.actorByUser.get("driver-1");
+  const vehicle = match.tank;
+  vehicle.x = 15.5;
+  vehicle.y = 24.2;
+  vehicle.angle = 0;
+  actor.x = vehicle.x;
+  actor.y = vehicle.y;
+  assert.equal(match.toggleVehicle(actor, vehicle.id), true);
+  assert.equal(match.toggleVehicle(actor), true);
+  assert.ok(actor.y < vehicle.y);
+
+  const pedestrianX = match.armoredCar.x - 1;
+  actor.x = pedestrianX;
+  actor.y = match.armoredCar.y;
+  match.moveEntity(actor, .4, 0, .24);
+  assert.equal(actor.x, pedestrianX, "a pedestrian cannot walk through the armored car collision body");
+
+  const blocker = match.actors.find(item => item !== actor);
+  vehicle.x = 12;
+  vehicle.y = 10;
+  vehicle.driverId = actor.id;
+  actor.x = vehicle.x;
+  actor.y = vehicle.y;
+  blocker.x = vehicle.x + 1;
+  blocker.y = vehicle.y;
+  match.moveVehicle(vehicle, .3, 0, .62);
+  assert.equal(vehicle.x, 12, "a vehicle cannot clip through a living pedestrian");
+});
+
+test("occupied vehicle damage contributes to the authoritative attacker ranking", () => {
+  const match = new AuthoritativeMatch(
+    { id: "DMG001", mapId: "city", modeId: "1v1" },
+    [{ id: "driver-1", alias: "Driver", loadoutId: "recon" }],
+    () => {},
+    () => {},
+  );
+  const driver = match.actorByUser.get("driver-1");
+  const attacker = match.actors.find(actor => actor.team !== driver.team);
+  driver.x = match.tank.x;
+  driver.y = match.tank.y;
+  assert.equal(match.toggleVehicle(driver, match.tank.id), true);
+  const beforeHealth = match.tank.health;
+  const beforeDamage = attacker.damage;
+
+  match.damage(driver, 40, attacker, "ak47");
+
+  assert.ok(match.tank.health < beforeHealth);
+  assert.ok(Math.abs((attacker.damage - beforeDamage) - (beforeHealth - match.tank.health)) < 1e-9);
 });

@@ -10,9 +10,10 @@ function audioSpy() {
   const calls = [];
   return {
     calls,
-    distantShot: (profile, range) => calls.push(["distantShot", profile, range]),
-    gunshot: profile => calls.push(["gunshot", profile]),
-    knife: profile => calls.push(["knife", profile]),
+    weaponShot: ({ weaponId, profile, source, listener, hit }) => {
+      calls.push(["weaponShot", weaponId, profile, Boolean(source), Boolean(listener), Boolean(hit)]);
+    },
+    hit: () => calls.push(["hit"]),
   };
 }
 
@@ -46,8 +47,8 @@ test("solo emits a traced shot for every accepted actor attack and none for reje
     assert.ok(Number.isFinite(payload.to.x));
     assert.ok(Number.isFinite(payload.to.y));
   }
-  assert.equal(audio.calls[0][0], "distantShot");
-  assert.deepEqual(audio.calls.at(-1), ["gunshot", "sniper"]);
+  assert.deepEqual(audio.calls[0], ["weaponShot", bot.weaponId, WEAPONS[bot.weaponId].visual, true, true, false]);
+  assert.deepEqual(audio.calls.at(-1), ["weaponShot", "barrett", "sniper", false, false, false]);
 });
 
 test("solo bot hit and miss decisions produce matching authoritative tracer events", () => {
@@ -105,12 +106,37 @@ test("network relays authoritative local and incoming shots with confirmed injur
   assert.deepEqual(events.map(event => event.payload.actorId), ["seal-0", "terror-0"]);
   assert.deepEqual(events[1].payload.to, { x: 0, y: 0, z: .58 });
   assert.equal(createCombatTracer(events[1].payload, "seal-0").incomingHit, true);
-  assert.deepEqual(audio.calls, [["gunshot", "sniper"], ["distantShot", "rifle", 5]]);
+  assert.deepEqual(audio.calls, [
+    ["weaponShot", "barrett", "sniper", false, false, false],
+    ["weaponShot", "ak47", "rifle", true, true, true],
+  ]);
   assert.equal(game.shake, .48);
   assert.equal(game.flash, .28);
 });
 
-test("remote melee presentation does not reuse a distant firearm sound", () => {
+test("network confirms every authoritative local hit without waiting for a kill", () => {
+  const audio = audioSpy();
+  const game = new NetworkGameState({ self: { id: "human-1" } }, audio);
+  game.player = { id: "seal-0", x: 0, y: 0, weaponId: "ak47" };
+
+  game.handleCombatEvent({
+    type: "shot",
+    actorId: "seal-0",
+    userId: "human-1",
+    weaponId: "ak47",
+    profile: "rifle",
+    team: "seal",
+    victimId: "terror-0",
+    hit: true,
+    from: { x: 0, y: 0, z: .68 },
+    to: { x: 3, y: 0, z: .58 },
+  });
+
+  assert.equal(game.hitMarker, .16);
+  assert.deepEqual(audio.calls.at(-1), ["hit"]);
+});
+
+test("remote melee presentation stays on the semantic weapon audio path", () => {
   const audio = audioSpy();
   const events = [];
   const game = new NetworkGameState(
@@ -134,7 +160,7 @@ test("remote melee presentation does not reuse a distant firearm sound", () => {
   });
 
   assert.equal(events.length, 1);
-  assert.deepEqual(audio.calls, []);
+  assert.deepEqual(audio.calls, [["weaponShot", "axe", "axe", true, true, false]]);
 });
 
 test("suspending a network match immediately clears latched movement and fire", () => {
