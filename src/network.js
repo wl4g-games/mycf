@@ -45,6 +45,7 @@ export class NetworkClient {
   }
 
   connectAndRegister(alias, loadoutId) {
+    if (this.connected && this.self) return Promise.resolve(this.self);
     if (this.registerPromise) return this.registerPromise;
     let url;
     try {
@@ -55,23 +56,31 @@ export class NetworkClient {
     this.registerPromise = new Promise((resolve, reject) => {
       const socket = new WebSocket(url);
       this.socket = socket;
+      let settled = false;
+      const isCurrent = () => this.socket === socket;
       const timeout = window.setTimeout(() => {
+        if (!isCurrent() || settled) return;
+        settled = true;
         this.registerPromise = null;
         reject(networkError("CONNECTION_TIMEOUT", "Connection timed out."));
         socket.close();
       }, 8000);
       const cleanup = () => window.clearTimeout(timeout);
       socket.addEventListener("open", () => {
+        if (!isCurrent()) return;
         this.connected = true;
         this.emit("status", { connected: true, code: "REGISTERING" });
         this.send("register", { alias, loadoutId });
       });
       socket.addEventListener("message", event => {
+        if (!isCurrent()) return;
         let message;
         try { message = JSON.parse(event.data); } catch (error) { return; }
         const payload = message.payload || {};
         if (message.type === "registered") {
           cleanup();
+          settled = true;
+          this.registerPromise = null;
           this.self = payload.self;
           resolve(payload.self);
         }
@@ -80,22 +89,35 @@ export class NetworkClient {
         if (message.type === "room_left") this.room = null;
         if (message.type === "error" && !this.self) {
           cleanup();
+          settled = true;
           this.registerPromise = null;
           reject(networkError(payload.code || "REGISTRATION_FAILED", payload.message || "Registration failed."));
+          socket.close();
         }
         this.emit(message.type, payload);
       });
       socket.addEventListener("close", () => {
+        if (!isCurrent()) return;
         cleanup();
+        this.socket = null;
         this.connected = false;
         this.registerPromise = null;
+        this.self = null;
+        this.room = null;
+        this.users = [];
+        if (!settled) {
+          settled = true;
+          reject(networkError("CONNECTION_CLOSED", "The multiplayer connection closed before registration completed."));
+        }
         this.emit("status", { connected: false, code: "DISCONNECTED" });
       });
       socket.addEventListener("error", () => {
-        if (!this.self) {
+        if (isCurrent() && !this.self && !settled) {
           cleanup();
+          settled = true;
           this.registerPromise = null;
           reject(networkError("CONNECTION_FAILED", "Unable to connect to the multiplayer server."));
+          socket.close();
         }
       });
     });

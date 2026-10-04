@@ -1,4 +1,4 @@
-import { GAME_MODES, LOADOUTS, MAPS, TEAM, THROWABLES, WEAPONS, distance, isSolid, normalizeAngle, spawnCells } from "./config.js?v=20261004-fps-v3";
+import { GAME_MODES, LOADOUTS, MAPS, MATCH_TIME, TEAM, THROWABLES, WEAPONS, distance, isSolid, normalizeAngle, spawnCells } from "./config.js?v=20261004-fps-v3";
 
 export class NetworkGameState {
   constructor(client, audio, emit = () => {}) {
@@ -46,7 +46,7 @@ export class NetworkGameState {
     };
     this.actors = [this.player];
     this.localAngle = this.player.angle;
-    this.time = 480;
+    this.time = Number(payload.duration) || MATCH_TIME;
     this.tank = { ...this.map.tank, turretAngle: this.map.tank.angle, health: 100, occupied: false, driverId: null, speed: 0 };
     this.started = true;
     this.finished = false;

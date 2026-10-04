@@ -61,14 +61,26 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            ws-server/package-lock.json
 
-      - name: Install dependencies
+      - name: Install frontend dependencies
         run: npm ci
 
-      - name: Run tests
+      - name: Install WebSocket server dependencies
+        run: npm ci --prefix ws-server
+
+      - name: Run frontend tests
         run: npm test
 
-      - name: Build production bundle
+      - name: Run WebSocket server tests
+        run: npm test --prefix ws-server
+
+      - name: Check source syntax
+        run: npm run check
+
+      - name: Build static frontend bundle
         env:
           PAGES_BASE: /${{ github.event.repository.name }}/
           VITE_MYCF_WS_URL: ${{ vars.MYCF_WS_URL }}

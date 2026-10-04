@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AuthoritativeMatch } from "../server/match.js";
+import { AuthoritativeMatch } from "../src/match.js";
 
 test("1v1 creates one actor per team and assigns two players to opposing sides", () => {
   const members = [
@@ -14,6 +14,7 @@ test("1v1 creates one actor per team and assigns two players to opposing sides",
     () => {},
   );
   assert.equal(match.actors.length, 2);
+  assert.equal(match.time, 290);
   assert.equal(match.actors.filter(actor => actor.isBot).length, 0);
   assert.deepEqual(members.map(member => match.assignmentFor(member.id).team), ["seal", "terror"]);
   assert.equal(match.mode.scoreLimit, 10);
@@ -68,4 +69,26 @@ test("16v16 creates 32 actors and alternates human team assignments", () => {
   assert.equal(match.actors.length, 32);
   assert.deepEqual(members.map(member => match.assignmentFor(member.id).team), ["seal", "terror", "seal", "terror", "seal"]);
   assert.equal(match.actors.filter(actor => actor.isBot).length, 27);
+});
+
+test("the authoritative match deadline remains 290 wall-clock seconds during delayed ticks", () => {
+  let now = 1000;
+  let finished = null;
+  const match = new AuthoritativeMatch(
+    { id: "CLOCK1", mapId: "city", modeId: "1v1" },
+    [{ id: "clock-user", alias: "Timer", loadoutId: "recon" }],
+    () => {},
+    result => { finished = result; },
+    { now: () => now },
+  );
+
+  now += 289000;
+  match.update(.05);
+  assert.equal(match.time, 1);
+  assert.equal(finished, null);
+
+  now += 1000;
+  match.update(.05);
+  assert.equal(match.time, 0);
+  assert.ok(finished);
 });

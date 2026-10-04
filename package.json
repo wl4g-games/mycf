@@ -3,20 +3,16 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "Original cartoon-style 3D H5 shooter with a same-origin WebSocket multiplayer server",
+  "description": "Original cartoon-style 3D H5 shooter client published as static assets",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "start": "node server/index.js",
     "test": "node --test test/*.test.js",
-    "check": "node --check .github/scripts/upsert-pr-ci-comment.mjs && node --check api/health.js && node --check api/ws.js && node --check server/index.js && node --check server/runtime.js && node --check server/static.js && node --check server/lobby.js && node --check server/match.js && node --check src/i18n.js && node --check src/locales/en.js && node --check src/locales/zh-CN.js && node --check src/main.js && node --check src/input.js && node --check src/network.js && node --check src/network-game.js && node --check src/game.js && node --check src/render-animation.js && node --check src/weapon-viewmodel.js && node --check src/renderer.js"
+    "check": "node --check .github/scripts/upsert-pr-ci-comment.mjs && node --check src/i18n.js && node --check src/locales/en.js && node --check src/locales/zh-CN.js && node --check src/main.js && node --check src/input.js && node --check src/network.js && node --check src/network-game.js && node --check src/game.js && node --check src/render-animation.js && node --check src/weapon-viewmodel.js && node --check src/renderer.js && npm --prefix ws-server run check"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
-  },
-  "dependencies": {
-    "ws": "8.22.0"
   },
   "devDependencies": {
     "vite": "7.3.6"

@@ -113,85 +113,89 @@ Automated tests require the English and Simplified Chinese catalogs to expose id
 
 ## Run locally · 本地运行
 
-Node.js `^20.19.0` or `>=22.12.0` is required.<br>
-需要 Node.js `^20.19.0` 或 `>=22.12.0`。
+The static frontend requires Node.js `^20.19.0` or `>=22.12.0`; the independent WebSocket service pins Node.js `22.x`.<br>
+静态前端需要 Node.js `^20.19.0` 或 `>=22.12.0`；独立 WebSocket 服务固定使用 Node.js `22.x`。
 
-Install dependencies, build the game, and start the integrated static and WebSocket server:<br>
-安装依赖、构建游戏，并启动集成静态站点与 WebSocket 服务：
+Install the frontend and WebSocket service dependencies independently:<br>
+分别安装前端与 WebSocket 服务依赖：
 
 ```bash
 npm ci
-npm run build
-MYCF_STATIC_ROOT=dist npm start
+npm ci --prefix ws-server
 ```
 
-Open <http://127.0.0.1:8787/>; both solo and online modes use the same local server.<br>
-打开 <http://127.0.0.1:8787/>，单机版与网络版均使用同一个本地服务。
-
-For frontend development with hot reload, run the backend and Vite in separate terminals:<br>
-如需前端热更新，请在两个终端中分别运行后端与 Vite：
+Run the two projects in separate terminals. The Vite environment variable points the static client at the local WebSocket service:<br>
+在两个终端中分别运行两个项目；Vite 环境变量会让静态客户端连接本地 WebSocket 服务：
 
 ```bash
-# Terminal 1
-npm start
+# Terminal 1: independent Node.js WebSocket service
+npm --prefix ws-server start
 
-# Terminal 2
-npm run dev
+# Terminal 2: static Vite frontend
+VITE_MYCF_WS_URL=http://127.0.0.1:8787/ws npm run dev
 ```
 
-Solo mode works immediately at the Vite URL. Before choosing online mode, set `window.MYCF_WS_URL = "ws://127.0.0.1:8787/ws"` in the browser console so the development page connects to the local backend.
+Open the URL printed by Vite. Solo mode runs entirely in the browser, while online mode connects to `127.0.0.1:8787`; the server readiness endpoint is <http://127.0.0.1:8787/health>.
 
-通过 Vite 地址打开后可直接使用单机版。选择网络版之前，请在浏览器控制台设置 `window.MYCF_WS_URL = "ws://127.0.0.1:8787/ws"`，让开发页面连接本地后端。
+打开 Vite 输出的地址即可。单机版完全在浏览器中运行，网络版连接 `127.0.0.1:8787`；服务就绪探针为 <http://127.0.0.1:8787/health>。
 
 ## Test and build · 测试与构建
 
-Run the recommended local validation, which adds explicit source syntax checks to the pull request CI sequence:<br>
-运行推荐的本地验证；它在 Pull Request CI 流程之外增加了显式源码语法检查：
+Run the same validation used by pull request CI, including explicit source syntax checks for both projects:<br>
+运行与 Pull Request CI 相同的验证，其中包含两个项目的显式源码语法检查：
 
 ```bash
 npm ci
+npm ci --prefix ws-server
 npm test
+npm test --prefix ws-server
 npm run check
 npm run build -- --base=/mycf/
 ```
 
-The production bundle is written to `dist/`.<br>
-生产构建产物会写入 `dist/`。
+The frontend production bundle is written to `dist/`; the WebSocket service remains a separate Node.js project and is never copied into the Pages artifact.<br>
+前端生产构建产物会写入 `dist/`；WebSocket 服务始终是独立 Node.js 项目，绝不会被复制到 Pages 制品中。
 
 ## Container image · 容器镜像
 
-The production image serves the static game and Node.js WebSocket service together on port `8080`.<br>
-生产镜像会在 `8080` 端口同时提供静态游戏与 Node.js WebSocket 服务。
+The production image contains only the independent Node.js WebSocket service on port `8080`. GitHub Pages continues to host the static game separately.<br>
+生产镜像仅包含独立 Node.js WebSocket 服务并监听 `8080` 端口；静态游戏仍由 GitHub Pages 单独托管。
 
 ```bash
-docker build --build-arg APP_BASE=/ -t mycf:local .
-docker run --rm --name mycf -p 8080:8080 mycf:local
+docker build -t toon-strike-ws:local .
+docker run --rm --name toon-strike-ws -p 8080:8080 toon-strike-ws:local
 ```
 
-Open <http://127.0.0.1:8080/> after the container becomes healthy.<br>
-容器进入健康状态后，打开 <http://127.0.0.1:8080/>。
+After the container becomes healthy, use <http://127.0.0.1:8080/health> for readiness and `ws://127.0.0.1:8080/ws` for multiplayer traffic.<br>
+容器进入健康状态后，使用 <http://127.0.0.1:8080/health> 检查就绪状态，并通过 `ws://127.0.0.1:8080/ws` 传输多人对战流量。
 
 ## Vercel deployment · Vercel 部署
 
-The repository is a standard Vite plus Vercel Functions project. [`vercel.json`](vercel.json) enables Fluid compute, builds the static client into `dist/`, and rewrites same-origin `/ws` upgrades to the portable Node.js server exported by [`api/ws.js`](api/ws.js). The standalone Docker and systemd entry point reuses the same server factory, so protocol behavior stays in one implementation.<br>
-本仓库是标准的 Vite 与 Vercel Functions 项目。[`vercel.json`](vercel.json) 会启用 Fluid compute、把静态客户端构建到 `dist/`，并将同源 `/ws` 升级请求重写到 [`api/ws.js`](api/ws.js) 导出的可移植 Node.js 服务。独立 Docker 与 systemd 入口复用同一个服务工厂，因此协议行为只保留一份实现。
+[`ws-server/`](ws-server) is a self-contained standard Node.js project and is the only part intended for Vercel. Its [`vercel.json`](ws-server/vercel.json) enables Fluid compute and maps `/ws` and `/health` to small Function adapters; it does not build, copy, or serve the root Vite frontend.<br>
+[`ws-server/`](ws-server) 是自包含的标准 Node.js 项目，也是唯一用于 Vercel 的部分。其 [`vercel.json`](ws-server/vercel.json) 会启用 Fluid compute，并把 `/ws` 与 `/health` 映射到轻量 Function 适配器；它不会构建、复制或托管根目录 Vite 前端。
+
+For a Git-connected Vercel project, set **Root Directory** to `ws-server` and **Framework Preset** to **Other**. For a CLI Preview, run these commands from the repository root:<br>
+通过 Git 连接 Vercel 项目时，请将 **Root Directory** 设为 `ws-server`，并将 **Framework Preset** 设为 **Other**。如需通过 CLI 创建 Preview，请在仓库根目录执行：
 
 ```bash
 npx vercel login
-npx vercel
+npx vercel ws-server
 ```
 
-The Preview command above is only for validating the Vite build, `/health` route, `/ws` rewrite, and WebSocket handshake. It is not a production multiplayer deployment.<br>
-上方 Preview 命令仅用于验证 Vite 构建、`/health` 路由、`/ws` 重写与 WebSocket 握手，并不代表可用于生产的多人部署。
+The Preview command deploys only the child Node.js project and creates an endpoint for manually validating `/health`, the `/ws` rewrite, and the WebSocket handshake. Vercel never replaces the GitHub Pages frontend deployment.<br>
+上方 Preview 命令只部署 Node.js 子项目，并创建一个可手动验证 `/health`、`/ws` 重写与 WebSocket 握手的端点；Vercel 永远不会取代 GitHub Pages 前端部署。
 
 Vercel can place WebSocket clients on different Function instances and can recycle an instance at its duration limit. A public deployment therefore needs durable room and match coordination through Redis plus client reconnection. The current in-memory runtime is suitable only for local single-process development; even a Vercel Preview deployment does not guarantee correct multiplayer routing or recovery.<br>
 Vercel 可能把 WebSocket 客户端分配到不同的 Function 实例，也可能在运行时限到达后回收实例。因此公开部署需要使用 Redis 持久协调房间与比赛状态，并在客户端实现断线重连。当前纯内存运行时仅适合本地单进程开发；即使是 Vercel Preview 部署，也无法保证多人路由与恢复行为正确。
 
-The configured Function limit is 300 seconds while a match lasts 480 seconds, so the current Preview runtime cannot complete a full match even when every player reaches the same instance. Run `npx vercel --prod` only after Redis-backed coordination, reconnect and resume support, abuse controls, and a real two-client Preview smoke test are complete.<br>
-当前 Function 运行上限为 300 秒，而一局比赛持续 480 秒；即使所有玩家恰好进入同一实例，现有 Preview 运行时也无法完成整局比赛。只有在完成 Redis 协调、断线重连与恢复、防滥用控制，以及真实 Preview 双客户端冒烟测试之后，才应执行 `npx vercel --prod`。
+Each match has a 290-second time limit and may end earlier when a team reaches the score limit; the WebSocket Function is capped at 300 seconds. Vercel measures that cap from the initial socket connection, not from match start, so time spent registering, inviting, or waiting in a room consumes the same limit; the 10-second numerical margin alone cannot guarantee a complete match.<br>
+每局比赛时限为 290 秒，并可在一方达到得分上限时提前结束；WebSocket Function 上限为 300 秒。Vercel 从首次建立连接时开始计算时限，而不是从比赛开始时计算，因此注册、邀请与房间等待都会消耗同一时限；仅有数值上的 10 秒余量无法保证完成整局比赛。
 
-After a managed endpoint is ready, set the repository variable below. Pull request and release builds pass it to Vite, allowing the GitHub Pages mirror to connect without hard-coding a deployment domain.<br>
-托管端点准备就绪后，请设置下方仓库变量。Pull Request 与发布构建会把它传给 Vite，使 GitHub Pages 镜像无需硬编码部署域名即可连接。
+Run a production deployment only after Redis-backed coordination, reconnect and resume support, abuse controls, and a real two-client Preview smoke test are complete.<br>
+只有在完成 Redis 协调、断线重连与恢复、防滥用控制，以及真实 Preview 双客户端冒烟测试之后，才应执行生产部署。
+
+After a managed endpoint is ready, set the repository variable below. Pull request and release builds pass it to Vite, allowing the GitHub Pages frontend to connect without hard-coding a deployment domain.<br>
+托管端点准备就绪后，请设置下方仓库变量。Pull Request 与发布构建会把它传给 Vite，使 GitHub Pages 前端无需硬编码部署域名即可连接。
 
 ```bash
 gh variable set MYCF_WS_URL --body "https://<project>.vercel.app"
@@ -203,16 +207,17 @@ gh variable set MYCF_WS_URL --body "https://<project>.vercel.app"
 
 [Pull Request CI](.github/workflows/ci.yml) 会维护一条实时英文状态评论、安装依赖、运行全部测试并验证生产构建。评论会从开始状态原地更新为最终结果，并且旧运行无法覆盖较新的运行。
 
-After code reaches `main`, the [release workflow](.github/workflows/release.yml) calculates the next semantic version, creates `mycf-vX.Y.Z-dist.tar.gz`, publishes a GitHub Release, and then publishes the amd64 GHCR image and GitHub Pages deployment in parallel.
+After code reaches `main`, the [release workflow](.github/workflows/release.yml) calculates the next semantic version, creates the static `mycf-vX.Y.Z-dist.tar.gz`, publishes a GitHub Release, and then publishes the WebSocket-server amd64 GHCR image and GitHub Pages frontend in parallel.
 
-代码进入 `main` 后，[release workflow](.github/workflows/release.yml) 会计算下一个语义版本、生成 `mycf-vX.Y.Z-dist.tar.gz`、发布 GitHub Release，然后并行发布 amd64 GHCR 镜像与 GitHub Pages。
+代码进入 `main` 后，[release workflow](.github/workflows/release.yml) 会计算下一个语义版本、生成静态 `mycf-vX.Y.Z-dist.tar.gz`、发布 GitHub Release，然后并行发布 WebSocket 服务 amd64 GHCR 镜像与 GitHub Pages 前端。
 
 ```text
 main updated / main 更新
-  → semantic version + npm ci + Vite build / 语义版本 + 安装依赖 + 构建
-  → mycf-vX.Y.Z-dist.tar.gz + GitHub Release / 发布归档与 Release
-       ├→ linux/amd64 image / linux/amd64 镜像 → ghcr.io/wl4g-games/mycf
-       └→ GitHub Pages deploy / GitHub Pages 部署
+  ├→ semantic version + frontend npm ci + Vite build / 语义版本 + 安装前端依赖 + Vite 构建
+  │    → mycf-vX.Y.Z-dist.tar.gz + GitHub Release / 发布归档与 Release
+  │         └→ static dist / 静态 dist → GitHub Pages deploy / GitHub Pages 部署
+  └→ ws-server install + tests + checks / WS 服务安装 + 测试 + 检查
+       → WebSocket server image / WebSocket 服务镜像 → ghcr.io/wl4g-games/mycf
 ```
 
 The detailed versioning and pipeline rules are documented in [CI/CD Architecture](.github/workflows/README.md). GitHub Pages must use **GitHub Actions** as its deployment source.
@@ -221,15 +226,18 @@ The detailed versioning and pipeline rules are documented in [CI/CD Architecture
 
 ## Deployment constraints · 部署约束
 
-- **Managed preview target · 托管预览目标：** Vercel serves the static client and same-origin `/ws` Function; Fluid compute must remain enabled, and the deployment remains preview-only until shared durable state and reconnection are implemented.<br>
-  Vercel 同时提供静态客户端与同源 `/ws` Function，并且必须保持启用 Fluid compute；在实现共享持久状态与断线重连之前，该部署仅用于预览。
-- **Static mirror · 静态镜像：** GitHub Pages remains the top-of-document experience link for solo play and uses `VITE_MYCF_WS_URL` when a managed multiplayer endpoint is configured.<br>
-  GitHub Pages 继续作为文档顶部的单机体验链接；配置托管多人端点后，会通过 `VITE_MYCF_WS_URL` 使用网络模式。
+- **Static frontend · 静态前端：** GitHub Pages remains the top-of-document experience link and is the only CI-deployed frontend; it uses `VITE_MYCF_WS_URL` when a managed multiplayer endpoint is configured.<br>
+  GitHub Pages 继续作为文档顶部的体验链接，也是 CI 唯一部署的前端；配置托管多人端点后，它会通过 `VITE_MYCF_WS_URL` 使用网络模式。
+- **Independent Vercel service · 独立 Vercel 服务：** Vercel receives only the `ws-server` Node.js child project, never the Vite frontend or `dist/` artifact; Fluid compute must remain enabled.<br>
+  Vercel 只接收 `ws-server` Node.js 子项目，绝不接收 Vite 前端或 `dist/` 制品；Fluid compute 必须保持启用。
+- **Bounded match · 有限局时：** The authoritative server and both solo and online clients use the same 290-second maximum match time, with score-limit victories allowed earlier.<br>
+  权威服务端、单机客户端与网络客户端统一使用 290 秒最大比赛时限，并允许达到得分上限时提前获胜。
 - **Durable multiplayer state · 持久多人状态：** Public scale-out must not rely on Function memory for aliases, presence, invitations, rooms, or authoritative matches.<br>
   公开扩容时，别名、在线状态、邀请、房间与服务器权威比赛均不得只依赖 Function 内存。
-- **Legacy host binding · 传统宿主机监听：** If the optional host deployment is used, the Node.js service binds only to `127.0.0.1:8787`.<br>
-  如果使用可选的传统宿主机部署，Node.js 服务只能监听 `127.0.0.1:8787`。
-
+- **Browser origins · 浏览器来源：** The server accepts the GitHub Pages origin, same-origin deployments, and local development by default; additional trusted origins use `MYCF_ALLOWED_ORIGINS`.<br>
+  服务端默认接受 GitHub Pages 来源、同源部署与本地开发；其他可信来源通过 `MYCF_ALLOWED_ORIGINS` 配置。
+- **Legacy host binding · 传统宿主机监听：** The tracked systemd unit binds the optional host deployment to `127.0.0.1:8787`; the container uses its isolated `0.0.0.0:8080` listener.<br>
+  仓库内 systemd 单元会让可选宿主机部署绑定 `127.0.0.1:8787`；容器则在隔离环境中监听 `0.0.0.0:8080`。
 - **WebSocket routing · WebSocket 路由：** Host deployments expose WebSocket upgrades at `/ws` through their public reverse proxy.<br>
   宿主机部署通过公网反向代理在 `/ws` 路径提供 WebSocket 升级。
 - **Nginx scope · Nginx 范围：** Only `/etc/nginx/conf.d/mycf.conf` may be changed; every other Nginx configuration file is out of scope.<br>
