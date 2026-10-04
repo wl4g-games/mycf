@@ -1,20 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
-  "fluid": true,
-  "functions": {
-    "api/ws.js": {
-      "maxDuration": 300
-    }
-  },
-  "rewrites": [
-    {
-      "source": "/health",
-      "destination": "/api/health"
-    },
-    {
-      "source": "/ws",
-      "destination": "/api/ws"
-    }
-  ]
+  "framework": "container",
+  "fluid": true
 }

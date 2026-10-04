@@ -3,7 +3,7 @@ import { WebSocketServer } from "ws";
 import { browserOriginAllowed, requestIp } from "./access-policy.js";
 import { LobbyService } from "./lobby.js";
 
-const DEFAULT_WEBSOCKET_PATHS = new Set(["/ws", "/api/ws"]);
+const DEFAULT_WEBSOCKET_PATHS = new Set(["/ws"]);
 const MAX_CONNECTIONS = 256;
 const MAX_CONNECTIONS_PER_IP = 8;
 const REGISTRATION_TIMEOUT_MS = 10000;

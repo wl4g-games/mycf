@@ -22,8 +22,8 @@ kbd { font: 800 10px/1 system-ui, sans-serif; letter-spacing: .06em; }
 .is-hidden { display: none !important; }
 
 .landing { position: absolute; inset: 0; z-index: 20; overflow: hidden; background-position: center; background-size: cover; transition: background-image .25s ease; }
-.landing.map-city { background-image: url("assets/toon-city.png?v=20261004-fps-v3"); }
-.landing.map-wild { background-image: url("assets/toon-wild.png?v=20261004-fps-v3"); }
+.landing.map-city { background-image: url("assets/toon-city.png?v=20261004-fps-v4"); }
+.landing.map-wild { background-image: url("assets/toon-wild.png?v=20261004-fps-v4"); }
 .landing::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(15,43,64,.94) 0%, rgba(15,43,64,.74) 29%, rgba(15,43,64,.08) 57%, rgba(15,43,64,.52) 77%, rgba(15,43,64,.82)), linear-gradient(0deg, rgba(11,34,52,.82), transparent 48%); }
 .landing-shade { position: absolute; inset: 0; z-index: 1; opacity: .24; background-image: radial-gradient(circle, rgba(255,255,255,.25) 1.5px, transparent 2px); background-size: 28px 28px; mask-image: linear-gradient(90deg, #000, transparent 65%); }
 .brand { position: absolute; z-index: 4; top: 26px; left: 38px; display: flex; gap: 11px; align-items: center; color: var(--cream); font-weight: 900; font-size: 13px; letter-spacing: .16em; text-shadow: 0 3px 0 var(--ink); }

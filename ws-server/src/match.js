@@ -2,6 +2,7 @@ import {
   BOT_NAMES, GAME_MODES, LOADOUTS, MAPS, MATCH_TIME, TEAM, THROWABLES, WEAPONS,
   clamp, distance, isSolid, normalizeAngle, spawnCells,
 } from "./game-config.js";
+import { createShotEvent } from "./shot-geometry.js";
 
 const TEAMS = [TEAM.SEAL, TEAM.TERROR];
 const randomItem = list => list[Math.floor(Math.random() * list.length)];
@@ -234,10 +235,14 @@ export class AuthoritativeMatch {
     if (!actor.alive || actor.cooldown > 0) return;
     const weapon = WEAPONS[actor.weaponId] || WEAPONS.ak47;
     actor.cooldown = weapon.interval;
-    this.emit({ type: "shot", actorId: actor.id, userId: actor.userId, weaponId: weapon.id, profile: weapon.visual });
     const spread = actor.scoped && weapon.scopedSpread != null ? weapon.scopedSpread : weapon.spread;
     const victim = this.findTargetInArc(actor, weapon.range, spread);
-    if (victim) this.damage(victim, weapon.damage, actor, weapon.id);
+    this.commitShot(actor, weapon, victim, weapon.damage);
+  }
+
+  commitShot(actor, weapon, victim, damage = 0) {
+    this.emit(createShotEvent(this.map, actor, weapon, victim));
+    if (victim && damage > 0) this.damage(victim, damage, actor, weapon.id);
   }
 
   findTargetInArc(actor, range, margin) {
@@ -345,7 +350,8 @@ export class AuthoritativeMatch {
       const weapon = WEAPONS[bot.weaponId] || WEAPONS.ak47;
       if (visible && targetDistance < weapon.range && Math.abs(normalizeAngle(Math.atan2(target.y - bot.y, target.x - bot.x) - bot.angle)) < .2 && bot.cooldown <= 0) {
         bot.cooldown = Math.max(.16, weapon.interval * 2.8 + Math.random() * .45);
-        if (Math.random() < clamp(.78 - targetDistance * .035, .2, .72)) this.damage(target, weapon.damage * .34, bot, weapon.id);
+        const victim = Math.random() < clamp(.78 - targetDistance * .035, .2, .72) ? target : null;
+        this.commitShot(bot, weapon, victim, weapon.damage * .34);
       }
       if (Math.random() < dt * .008 && targetDistance < 10) this.throwGrenade(bot);
     }

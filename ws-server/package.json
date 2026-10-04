@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/standalone.js",
     "test": "node --test test/*.test.js",
-    "check": "node --check api/health.js && node --check api/ws.js && node --check src/access-policy.js && node --check src/game-config.js && node --check src/lobby.js && node --check src/match.js && node --check src/runtime.js && node --check src/standalone.js"
+    "check": "node --check scripts/smoke-deployment.mjs && node --check src/access-policy.js && node --check src/game-config.js && node --check src/lobby.js && node --check src/match.js && node --check src/runtime.js && node --check src/shot-geometry.js && node --check src/standalone.js"
   },
   "engines": {
     "node": "22.x"

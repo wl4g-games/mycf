@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { WeaponViewmodel, advanceWeaponEffects, getViewmodelProfile } from "../src/weapon-viewmodel.js";
+import {
+  WeaponViewmodel, advanceWeaponEffects, getViewmodelPose, getViewmodelProfile,
+} from "../src/weapon-viewmodel.js";
 
 test("firearm shots start recoil and a short muzzle flash", () => {
   const viewmodel = new WeaponViewmodel();
@@ -28,4 +30,42 @@ test("melee attacks swing without creating a muzzle flash", () => {
 test("paused frames do not advance weapon presentation state", () => {
   const state = { kick: .7, muzzle: .04, melee: .5, time: 3, weaponId: "ak47" };
   assert.strictEqual(advanceWeaponEffects(state, 0), state);
+});
+
+test("first-person firearms point from the lower right into the scene", () => {
+  const width = 1920;
+  const height = 1080;
+  for (const weaponId of ["barrett", "ak47", "policeMG", "whitePistol", "baike", "dualPistols"]) {
+    const pose = getViewmodelPose(weaponId, width, height);
+    assert.ok(pose.origin.x > width * .8, `${weaponId} starts at the lower right`);
+    assert.ok(pose.origin.y > height * .95, `${weaponId} starts below the sight line`);
+    assert.ok(pose.muzzle.x < pose.origin.x, `${weaponId} muzzle advances toward center`);
+    assert.ok(pose.muzzle.x > width * .45, `${weaponId} muzzle does not point off the left edge`);
+    assert.ok(pose.muzzle.y < pose.origin.y - height * .2, `${weaponId} is foreshortened into the scene`);
+  }
+});
+
+test("walking bob and recoil preserve the forward-facing muzzle orientation", () => {
+  const pose = getViewmodelPose(
+    "ak47",
+    1280,
+    720,
+    { activity: 1, phase: Math.PI / 2 },
+    { kick: .7, time: 2 },
+  );
+  assert.ok(pose.muzzle.x < pose.origin.x);
+  assert.ok(pose.muzzle.y < pose.origin.y);
+  assert.ok(pose.angle > .7 && pose.angle < 1);
+});
+
+test("portrait viewports keep long firearm muzzles inside the visible scene", () => {
+  const width = 390;
+  const height = 844;
+  for (const weaponId of ["barrett", "ak47", "policeMG"]) {
+    const pose = getViewmodelPose(weaponId, width, height);
+    assert.ok(pose.size < height, `${weaponId} scales from the narrow viewport edge`);
+    assert.ok(pose.muzzle.x > 0, `${weaponId} muzzle remains on screen`);
+    assert.ok(pose.muzzle.x < width, `${weaponId} muzzle remains right of the far edge`);
+    assert.ok(pose.muzzle.y > 0 && pose.muzzle.y < height, `${weaponId} muzzle remains vertically visible`);
+  }
 });

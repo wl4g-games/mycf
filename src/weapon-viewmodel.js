@@ -4,29 +4,29 @@ const VIEWMODELS = Object.freeze({
   barrett: {
     kind: "rifle", body: "#334d59", accent: "#64cfdb", stock: "#263842",
     length: .72, receiver: .35, barrel: .42, scope: true, magazine: false,
-    originX: .88, originY: .92, angle: .43, kick: 1,
+    originX: .9, originY: .98, angle: .72, kick: 1,
   },
   ak47: {
     kind: "rifle", body: "#78482f", accent: "#d78b46", stock: "#56301f",
     length: .59, receiver: .32, barrel: .3, scope: false, magazine: true,
-    originX: .88, originY: .94, angle: .48, kick: .72,
+    originX: .9, originY: .99, angle: .76, kick: .72,
   },
   policeMG: {
     kind: "rifle", body: "#267b88", accent: "#72dce1", stock: "#205561",
     length: .62, receiver: .37, barrel: .3, scope: true, magazine: true,
-    originX: .89, originY: .95, angle: .46, kick: .58,
+    originX: .9, originY: .99, angle: .74, kick: .58,
   },
   whitePistol: {
     kind: "pistol", body: "#dce9ea", accent: "#7bcbd3", stock: "#63757c",
-    length: .34, originX: .82, originY: .96, angle: .6, kick: .68,
+    length: .34, originX: .85, originY: .99, angle: .88, kick: .68,
   },
   baike: {
     kind: "pistol", body: "#edf2ef", accent: "#df8d4c", stock: "#5a6468",
-    length: .35, originX: .82, originY: .96, angle: .59, kick: .76,
+    length: .35, originX: .85, originY: .99, angle: .86, kick: .76,
   },
   dualPistols: {
     kind: "dual", body: "#dce9ea", accent: "#62ced9", stock: "#53666d",
-    length: .33, originX: .84, originY: .98, angle: .58, kick: .54,
+    length: .33, originX: .86, originY: 1, angle: .87, kick: .54,
   },
   swiss: { kind: "knife", originX: .82, originY: 1.01, angle: .62 },
   axe: { kind: "axe", originX: .84, originY: 1.02, angle: .58 },
@@ -149,20 +149,40 @@ function drawRifle(ctx, size, profile, muzzle) {
   ctx.stroke();
 
   ctx.fillStyle = "#1a303c";
-  roundedPath(ctx, muzzleX, size * -.026, (profile.length - profile.receiver + .03) * size, size * .052, size * .018);
+  ctx.beginPath();
+  ctx.moveTo(receiverStart + size * .035, size * -.052);
+  ctx.lineTo(muzzleX, size * -.021);
+  ctx.lineTo(muzzleX, size * .021);
+  ctx.lineTo(receiverStart + size * .035, size * .052);
+  ctx.closePath();
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = profile.accent;
-  roundedPath(ctx, muzzleX - size * .025, size * -.045, size * .07, size * .09, size * .018);
+  ctx.beginPath();
+  ctx.ellipse(muzzleX - size * .012, 0, size * .026, size * .052, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
+  ctx.fillStyle = "#102733";
+  ctx.beginPath();
+  ctx.ellipse(muzzleX - size * .015, 0, size * .011, size * .025, 0, 0, Math.PI * 2);
+  ctx.fill();
 
   ctx.fillStyle = profile.body;
-  roundedPath(ctx, receiverStart, size * -.085, profile.receiver * size, size * .17, size * .035);
+  ctx.beginPath();
+  ctx.moveTo(receiverStart, size * -.07);
+  ctx.lineTo(size * .015, size * -.105);
+  ctx.lineTo(size * .035, size * .105);
+  ctx.lineTo(receiverStart, size * .07);
+  ctx.closePath();
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = profile.accent;
-  roundedPath(ctx, receiverStart + size * .045, size * -.064, size * .19, size * .042, size * .012);
+  ctx.beginPath();
+  ctx.moveTo(receiverStart + size * .045, size * -.054);
+  ctx.lineTo(size * -.035, size * -.072);
+  ctx.lineTo(size * -.02, size * -.026);
+  ctx.lineTo(receiverStart + size * .045, size * -.018);
+  ctx.closePath();
   ctx.fill();
 
   ctx.fillStyle = "#203641";
@@ -214,11 +234,25 @@ function drawPistol(ctx, size, profile, muzzle, handOffset = 0) {
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = profile.body;
-  roundedPath(ctx, muzzleX, size * -.075, profile.length * size + size * .055, size * .14, size * .028);
+  ctx.beginPath();
+  ctx.moveTo(muzzleX, size * -.045);
+  ctx.lineTo(size * .055, size * -.085);
+  ctx.lineTo(size * .055, size * .085);
+  ctx.lineTo(muzzleX, size * .045);
+  ctx.closePath();
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = profile.accent;
-  roundedPath(ctx, muzzleX + size * .025, size * -.052, profile.length * size - size * .025, size * .035, size * .012);
+  ctx.beginPath();
+  ctx.moveTo(muzzleX + size * .025, size * -.031);
+  ctx.lineTo(size * .025, size * -.059);
+  ctx.lineTo(size * .025, size * -.021);
+  ctx.lineTo(muzzleX + size * .025, size * -.012);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#102733";
+  ctx.beginPath();
+  ctx.ellipse(muzzleX - size * .009, 0, size * .012, size * .03, 0, 0, Math.PI * 2);
   ctx.fill();
   drawHandWrap(ctx, size, -.005, .12, -.18);
   if (muzzle > 0) drawMuzzleFlash(ctx, muzzleX - size * .025, size * -.005, size * .085, muzzle);
@@ -271,6 +305,36 @@ export function advanceWeaponEffects(state, dt) {
   };
 }
 
+export function getViewmodelPose(weaponId, width, height, motion = {}, state = {}) {
+  const profile = VIEWMODELS[weaponId] || FALLBACK;
+  const safeWidth = Math.max(0, Number(width) || 0);
+  const safeHeight = Math.max(0, Number(height) || 0);
+  const size = Math.min(safeHeight, safeWidth / 1.15);
+  const activity = clamp(Number(motion.activity) || 0, 0, 1);
+  const phase = Number(motion.phase) || 0;
+  const kick = Math.max(0, Number(state.kick) || 0);
+  const time = Number(state.time) || 0;
+  const bobX = Math.cos(phase * .5) * activity * size * .008;
+  const bobY = Math.abs(Math.sin(phase)) * activity * size * .012;
+  const idle = Math.sin(time * 1.8) * size * .002;
+  const origin = {
+    x: safeWidth * profile.originX + bobX + kick * size * .026,
+    y: safeHeight * profile.originY + bobY + idle + kick * size * .023,
+  };
+  const angle = profile.angle + kick * .045;
+  const muzzleDistance = ((profile.length || .5) + .03) * size;
+  return {
+    profile,
+    size,
+    angle,
+    origin,
+    muzzle: {
+      x: origin.x - Math.cos(angle) * muzzleDistance,
+      y: origin.y - Math.sin(angle) * muzzleDistance,
+    },
+  };
+}
+
 export class WeaponViewmodel {
   constructor() {
     this.state = { kick: 0, muzzle: 0, melee: 0, time: 0, weaponId: null };
@@ -292,29 +356,38 @@ export class WeaponViewmodel {
 
   get firing() { return this.state.muzzle > 0; }
 
+  displayWeaponId(weaponId) {
+    const effectActive = this.state.kick > 0 || this.state.muzzle > 0 || this.state.melee > 0;
+    return effectActive && this.state.weaponId ? this.state.weaponId : weaponId;
+  }
+
+  muzzlePosition(game, width, height, motion = {}) {
+    if (!game.player?.alive) return null;
+    if (game.player.scoped) return { x: width / 2, y: height / 2 };
+    return getViewmodelPose(
+      this.displayWeaponId(game.player.weaponId),
+      width,
+      height,
+      motion,
+      this.state,
+    ).muzzle;
+  }
+
   draw(ctx, game, width, height, motion = {}) {
     if (!game.player?.alive || game.player.scoped) return;
     const weaponId = game.player.weaponId;
     const effectActive = this.state.kick > 0 || this.state.muzzle > 0 || this.state.melee > 0;
-    const displayWeaponId = effectActive && this.state.weaponId ? this.state.weaponId : weaponId;
+    const displayWeaponId = this.displayWeaponId(weaponId);
     const profile = VIEWMODELS[displayWeaponId] || FALLBACK;
     if (!effectActive && this.state.weaponId && this.state.weaponId !== weaponId) {
       this.state = { ...this.state, kick: 0, muzzle: 0, melee: 0, weaponId };
     }
-    const activity = clamp(Number(motion.activity) || 0, 0, 1);
-    const phase = Number(motion.phase) || 0;
-    const kick = this.state.kick;
-    const bobX = Math.cos(phase * .5) * activity * height * .008;
-    const bobY = Math.abs(Math.sin(phase)) * activity * height * .012;
-    const idle = Math.sin(this.state.time * 1.8) * height * .002;
-    const size = height;
+    const pose = getViewmodelPose(displayWeaponId, width, height, motion, this.state);
+    const size = pose.size;
 
     ctx.save();
-    ctx.translate(
-      width * profile.originX + bobX + kick * height * .026,
-      height * profile.originY + bobY + idle + kick * height * .023,
-    );
-    ctx.rotate(profile.angle + kick * .045);
+    ctx.translate(pose.origin.x, pose.origin.y);
+    ctx.rotate(pose.angle);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     if (profile.kind === "rifle") drawRifle(ctx, size, profile, this.state.muzzle / .085);

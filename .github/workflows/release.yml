@@ -4,8 +4,9 @@
 # Job DAG:
 #   build (version + dist + artifacts)
 #      -> release (versioned dist.tar.gz GitHub Release)
-#          |-> build-image (after ws-server validation, linux/amd64 -> GHCR)
-#          +-> deploy (the same dist -> GitHub Pages)
+#          |-> build-image (same Dockerfile.vercel, linux/amd64 -> GHCR)
+#          |-> deploy-vercel (same Dockerfile.vercel -> Vercel Container Registry)
+#          +-> deploy-pages (the same dist -> GitHub Pages)
 
 name: Release and deploy
 
@@ -121,6 +122,24 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate multiplayer endpoint configuration
+        env:
+          MULTIPLAYER_URL: ${{ vars.MYCF_WS_URL }}
+          VERCEL_DEPLOY_ENABLED: ${{ vars.VERCEL_DEPLOY_ENABLED }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${MULTIPLAYER_URL}" ]]; then
+            if [[ "${VERCEL_DEPLOY_ENABLED}" == "true" ]]; then
+              echo "::error title=Missing multiplayer endpoint::MYCF_WS_URL must contain the stable Vercel production URL before deployment is enabled."
+              exit 1
+            fi
+            echo "::warning title=Multiplayer endpoint not configured::The Pages bundle will keep online mode unavailable until MYCF_WS_URL is set."
+          elif [[ ! "${MULTIPLAYER_URL}" =~ ^(https|wss)://[^[:space:]]+$ ]]; then
+            echo "::error title=Invalid multiplayer endpoint::MYCF_WS_URL must use HTTPS or WSS."
+            exit 1
+          fi
+
       - name: Build for GitHub Pages
         env:
           PAGES_BASE: /${{ github.event.repository.name }}/
@@ -210,7 +229,7 @@ jobs:
         run: npm run check
 
   build-image:
-    name: Build and push linux/amd64 image
+    name: Build and push WebSocket server image
     needs: [build, release, validate-ws-server]
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -237,7 +256,8 @@ jobs:
       - name: Build and push image
         uses: docker/build-push-action@v7
         with:
-          context: .
+          context: ./ws-server
+          file: ./ws-server/Dockerfile.vercel
           push: true
           platforms: linux/amd64
           tags: |
@@ -248,7 +268,95 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ needs.build.outputs.tag }}
 
-  deploy:
+  deploy-vercel:
+    name: Deploy WebSocket server to Vercel
+    if: ${{ vars.VERCEL_DEPLOY_ENABLED == 'true' }}
+    needs: [build, release, validate-ws-server]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    environment:
+      name: vercel-production
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.build.outputs.tag }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ws-server/package-lock.json
+
+      - name: Install WebSocket smoke-test dependency
+        working-directory: ws-server
+        run: npm ci --omit=dev
+
+      - name: Validate Vercel deployment credentials
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN}" || { echo "::error title=Missing Vercel secret::VERCEL_TOKEN is required."; exit 1; }
+          test -n "${VERCEL_ORG_ID}" || { echo "::error title=Missing Vercel secret::VERCEL_ORG_ID is required."; exit 1; }
+          test -n "${VERCEL_PROJECT_ID}" || { echo "::error title=Missing Vercel secret::VERCEL_PROJECT_ID is required."; exit 1; }
+
+      - name: Stage production container function
+        id: deploy
+        working-directory: ws-server
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEPLOYMENT_URL="$(npx --yes vercel@62.2.0 deploy --prod --skip-domain --yes --env PORT=8080 --token="${VERCEL_TOKEN}")"
+          if [[ ! "${DEPLOYMENT_URL}" =~ ^https://[A-Za-z0-9.-]+$ ]]; then
+            echo "::error title=Unexpected Vercel output::The deployment did not return a valid HTTPS URL."
+            exit 1
+          fi
+          printf 'url=%s\n' "${DEPLOYMENT_URL}" >> "${GITHUB_OUTPUT}"
+
+      - name: Smoke test production deployment
+        working-directory: ws-server
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for ATTEMPT in 1 2 3; do
+            if node scripts/smoke-deployment.mjs "${DEPLOYMENT_URL}"; then
+              exit 0
+            fi
+            if [[ "${ATTEMPT}" -lt 3 ]]; then sleep 5; fi
+          done
+          exit 1
+
+      - name: Promote verified deployment
+        working-directory: ws-server
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes vercel@62.2.0 promote "${DEPLOYMENT_URL}" --yes --token="${VERCEL_TOKEN}"
+
+      - name: Verify stable multiplayer endpoint
+        working-directory: ws-server
+        env:
+          MULTIPLAYER_URL: ${{ vars.MYCF_WS_URL }}
+        run: node scripts/smoke-deployment.mjs "${MULTIPLAYER_URL}"
+
+  deploy-pages:
     name: Deploy GitHub Pages
     needs: [build, release]
     runs-on: ubuntu-latest
