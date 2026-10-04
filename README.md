@@ -48,12 +48,12 @@ docker run --rm -p 8080:8080 mycf:local
 
 ## CI/CD
 
-- `.github/workflows/ci.yml`：PR 指向 `main` 时执行 `npm ci`、测试和生产构建。
+- `.github/workflows/ci.yml`：PR 指向 `main` 时维护一条动态状态评论，并执行 `npm ci`、测试和生产构建。
 - `.github/workflows/release.yml`：合并进入 `main` 后计算语义版本，打包 `dist.tar.gz` 并发布 GitHub Release，然后并行发布 linux/amd64 GHCR 镜像与 GitHub Pages。
-- 两套 workflow 的触发方式、权限、并发控制、版本策略、Job DAG 和 Action 版本均与 `jumprun` 项目一致。
+- 发布 workflow 与 `jumprun` 保持一致；PR 的安装、测试和构建步骤保持一致，并增加参考 `mcpfather` 的动态状态评论 Jobs。
 - GitHub Pages 上的网络版自动连接正式服务 `wss://mycf.wl4g.com/ws`；其他部署默认连接当前域名的 `/ws`。
 
-首次启用 Pages 时，在仓库 **Settings → Pages → Build and deployment → Source** 中选择 **GitHub Actions**。完整发布说明见 [`.github/workflows/README.md`](.github/workflows/README.md)。
+Pages 已使用 **GitHub Actions** 作为发布源。完整发布说明见 [`.github/workflows/README.md`](.github/workflows/README.md)。
 
 ## 操作
 

@@ -1,5 +1,6 @@
-# Pull request validation. Release and deployment are intentionally handled
-# only after code reaches main; see release.yml.
+# Pull request validation with one sticky PR status comment. Release and
+# deployment are intentionally handled only after code reaches main; see
+# release.yml.
 
 name: Pull Request CI
 
@@ -17,6 +18,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  comment-start:
+    name: Report CI start
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Checkout CI comment script
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
+      - name: Update PR CI comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MYCF_PR_NUMBER: ${{ github.event.pull_request.number }}
+          MYCF_COMMENT_PHASE: started
+          MYCF_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          node .github/scripts/upsert-pr-ci-comment.mjs || \
+            echo "::warning title=MyCF PR CI comment::Could not publish the CI status comment."
+
   build-and-test:
     name: Build and test
     runs-on: ubuntu-latest
@@ -43,3 +70,31 @@ jobs:
         env:
           PAGES_BASE: /${{ github.event.repository.name }}/
         run: npm run build -- --base="${PAGES_BASE}"
+
+  comment-final:
+    name: Report CI result
+    needs: [comment-start, build-and-test]
+    if: ${{ always() && github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Checkout CI comment script
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
+      - name: Update PR CI comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MYCF_PR_NUMBER: ${{ github.event.pull_request.number }}
+          MYCF_COMMENT_PHASE: final
+          MYCF_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          MYCF_CI_RESULT: ${{ needs.build-and-test.result }}
+        run: |
+          node .github/scripts/upsert-pr-ci-comment.mjs || \
+            echo "::warning title=MyCF PR CI comment::Could not publish the CI status comment."
