@@ -3,7 +3,6 @@ import { once } from "node:events";
 import test from "node:test";
 import { WebSocket } from "ws";
 
-import health from "../api/health.js";
 import { createGameServer } from "../src/runtime.js";
 
 function listen(server) {
@@ -36,7 +35,7 @@ function helloFrom(url, options) {
   });
 }
 
-test("the portable server runtime accepts standalone and Vercel WebSocket paths", async t => {
+test("the portable server runtime serves health and the canonical WebSocket path", async t => {
   const runtime = createGameServer();
   const address = await listen(runtime.server);
   t.after(async () => {
@@ -45,14 +44,19 @@ test("the portable server runtime accepts standalone and Vercel WebSocket paths"
   });
 
   const origin = `http://127.0.0.1:${address.port}`;
-  const health = await fetch(`${origin}/health`).then(response => response.json());
+  const healthResponse = await fetch(`${origin}/health`);
+  const health = await healthResponse.json();
   assert.equal(health.ok, true);
+  assert.equal(healthResponse.headers.get("cache-control"), "no-store");
 
-  for (const path of ["/ws", "/api/ws"]) {
-    const hello = await helloFrom(`ws://127.0.0.1:${address.port}${path}`);
-    assert.equal(hello.type, "hello");
-    assert.equal(hello.payload.protocol, 1);
-  }
+  const hello = await helloFrom(`ws://127.0.0.1:${address.port}/ws`);
+  assert.equal(hello.type, "hello");
+  assert.equal(hello.payload.protocol, 1);
+
+  await assert.rejects(
+    helloFrom(`ws://127.0.0.1:${address.port}/api/ws`),
+    /Unexpected server response: 404/,
+  );
 
   await assert.rejects(
     helloFrom(`ws://127.0.0.1:${address.port}/ws`, { origin: "https://untrusted.example" }),
@@ -85,33 +89,12 @@ test("unregistered sockets time out and released connection capacity can be reus
   assert.equal(hello.type, "hello");
 });
 
-test("Vercel configuration enables Fluid compute and rewrites the same-origin endpoint", async () => {
+test("Vercel configuration enables Fluid compute for the container function", async () => {
   const config = JSON.parse(await import("node:fs/promises").then(fs => fs.readFile(new URL("../vercel.json", import.meta.url), "utf8")));
-  assert.equal(config.framework, null);
+  assert.equal(config.framework, "container");
   assert.equal(config.fluid, true);
   assert.equal("buildCommand" in config, false);
   assert.equal("outputDirectory" in config, false);
-  assert.deepEqual(config.rewrites, [
-    { source: "/health", destination: "/api/health" },
-    { source: "/ws", destination: "/api/ws" },
-  ]);
-  assert.equal(config.functions["api/ws.js"].maxDuration, 300);
-});
-
-test("the Vercel health function reports readiness without creating a game runtime", () => {
-  const headers = new Map();
-  let statusCode = 0;
-  let body = "";
-  const response = {
-    setHeader(name, value) { headers.set(name, value); },
-    set statusCode(value) { statusCode = value; },
-    end(value) { body = value; },
-  };
-
-  health({}, response);
-
-  assert.equal(statusCode, 200);
-  assert.equal(headers.get("cache-control"), "no-store");
-  assert.equal(headers.get("content-type"), "application/json; charset=utf-8");
-  assert.deepEqual(JSON.parse(body), { ok: true, service: "toon-strike-ws" });
+  assert.equal("functions" in config, false);
+  assert.equal("rewrites" in config, false);
 });

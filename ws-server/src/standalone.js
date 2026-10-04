@@ -1,7 +1,7 @@
 import { createGameServer } from "./runtime.js";
 
 const host = process.env.MYCF_WS_HOST || "127.0.0.1";
-const port = Number(process.env.MYCF_WS_PORT || 8787);
+const port = Number(process.env.PORT || process.env.MYCF_WS_PORT || 8787);
 const runtime = createGameServer();
 const { server } = runtime;
 

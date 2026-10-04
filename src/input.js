@@ -1,24 +1,36 @@
+export function mouseAimDelta(movementX, movementY) {
+  return {
+    yaw: (Number.isFinite(movementX) ? movementX : 0) * .00215,
+    pitch: (Number.isFinite(movementY) ? movementY : 0) * .0018,
+  };
+}
+
 export class TouchAimState {
-  constructor(sensitivity = .0052) {
-    this.sensitivity = sensitivity;
+  constructor(yawSensitivity = .0052, pitchSensitivity = .0042) {
+    this.yawSensitivity = yawSensitivity;
+    this.pitchSensitivity = pitchSensitivity;
     this.pointers = new Map();
     this.firePointers = new Set();
     this.yaw = 0;
+    this.pitch = 0;
   }
 
-  begin(identifier, x, fire = false) {
-    if (identifier == null || !Number.isFinite(x)) return;
-    this.pointers.set(identifier, { x });
+  begin(identifier, x, y, fire = false) {
+    if (identifier == null || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    this.pointers.set(identifier, { x, y });
     if (fire) this.firePointers.add(identifier);
   }
 
-  move(identifier, x) {
+  move(identifier, x, y) {
     const pointer = this.pointers.get(identifier);
-    if (!pointer || !Number.isFinite(x)) return 0;
-    const delta = (x - pointer.x) * this.sensitivity;
+    if (!pointer || !Number.isFinite(x) || !Number.isFinite(y)) return { yaw: 0, pitch: 0 };
+    const yaw = (x - pointer.x) * this.yawSensitivity;
+    const pitch = (y - pointer.y) * this.pitchSensitivity;
     pointer.x = x;
-    this.yaw += delta;
-    return delta;
+    pointer.y = y;
+    this.yaw += yaw;
+    this.pitch += pitch;
+    return { yaw, pitch };
   }
 
   end(identifier) {
@@ -30,12 +42,19 @@ export class TouchAimState {
     this.pointers.clear();
     this.firePointers.clear();
     this.yaw = 0;
+    this.pitch = 0;
   }
 
   consumeYaw() {
     const yaw = this.yaw;
     this.yaw = 0;
     return yaw;
+  }
+
+  consumePitch() {
+    const pitch = this.pitch;
+    this.pitch = 0;
+    return pitch;
   }
 
   get fireHeld() { return this.firePointers.size > 0; }
@@ -47,6 +66,7 @@ export class InputController {
     this.keys = new Set();
     this.items = [];
     this.yaw = 0;
+    this.pitch = 0;
     this.mouseFireHeld = false;
     this.touchAim = new TouchAimState();
     this.moveTouch = null;
@@ -73,7 +93,10 @@ export class InputController {
   bindMouse() {
     this.canvas.addEventListener("contextmenu", event => event.preventDefault());
     this.canvas.addEventListener("mousemove", event => {
-      if (document.pointerLockElement === this.canvas) this.yaw += event.movementX * .00215;
+      if (document.pointerLockElement !== this.canvas) return;
+      const delta = mouseAimDelta(event.movementX, event.movementY);
+      this.yaw += delta.yaw;
+      this.pitch += delta.pitch;
     });
     this.canvas.addEventListener("mousedown", event => {
       if (event.button === 0) { this.mouseFireHeld = true; this.items.push(["fire"]); }
@@ -127,13 +150,15 @@ export class InputController {
     }
 
     const beginAim = (event, fire = false) => {
-      for (const touch of event.changedTouches) this.touchAim.begin(touch.identifier, touch.clientX, fire);
+      for (const touch of event.changedTouches) {
+        this.touchAim.begin(touch.identifier, touch.clientX, touch.clientY, fire);
+      }
     };
     const moveAim = event => {
       let handled = false;
       for (const touch of event.changedTouches) {
         if (!this.touchAim.pointers.has(touch.identifier)) continue;
-        this.touchAim.move(touch.identifier, touch.clientX);
+        this.touchAim.move(touch.identifier, touch.clientX, touch.clientY);
         handled = true;
       }
       if (handled && event.cancelable) event.preventDefault();
@@ -188,11 +213,13 @@ export class InputController {
   consume() {
     const state = {
       yaw: this.yaw + this.touchAim.consumeYaw(),
+      pitch: this.pitch + this.touchAim.consumePitch(),
       items: this.items.splice(0),
       movement: this.movement(),
       fireHeld: this.mouseFireHeld || this.touchAim.fireHeld,
     };
     this.yaw = 0;
+    this.pitch = 0;
     return state;
   }
 
@@ -200,6 +227,7 @@ export class InputController {
     this.keys.clear();
     this.items.length = 0;
     this.yaw = 0;
+    this.pitch = 0;
     this.mouseFireHeld = false;
     this.touchAim.clear();
     this.moveTouch = null;

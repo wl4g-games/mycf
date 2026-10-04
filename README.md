@@ -162,7 +162,7 @@ The production image contains only the independent Node.js WebSocket service on 
 生产镜像仅包含独立 Node.js WebSocket 服务并监听 `8080` 端口；静态游戏仍由 GitHub Pages 单独托管。
 
 ```bash
-docker build -t toon-strike-ws:local .
+docker build -f ws-server/Dockerfile.vercel -t toon-strike-ws:local ws-server
 docker run --rm --name toon-strike-ws -p 8080:8080 toon-strike-ws:local
 ```
 
@@ -171,19 +171,25 @@ After the container becomes healthy, use <http://127.0.0.1:8080/health> for read
 
 ## Vercel deployment · Vercel 部署
 
-[`ws-server/`](ws-server) is a self-contained standard Node.js project and is the only part intended for Vercel. Its [`vercel.json`](ws-server/vercel.json) enables Fluid compute and maps `/ws` and `/health` to small Function adapters; it does not build, copy, or serve the root Vite frontend.<br>
-[`ws-server/`](ws-server) 是自包含的标准 Node.js 项目，也是唯一用于 Vercel 的部分。其 [`vercel.json`](ws-server/vercel.json) 会启用 Fluid compute，并把 `/ws` 与 `/health` 映射到轻量 Function 适配器；它不会构建、复制或托管根目录 Vite 前端。
+[`ws-server/`](ws-server) is a self-contained standard Node.js project and is the only part intended for Vercel. Its [`Dockerfile.vercel`](ws-server/Dockerfile.vercel) is the shared production container definition, while [`vercel.json`](ws-server/vercel.json) selects the Container framework and enables Fluid compute; neither file builds, copies, or serves the root Vite frontend.<br>
+[`ws-server/`](ws-server) 是自包含的标准 Node.js 项目，也是唯一用于 Vercel 的部分。其 [`Dockerfile.vercel`](ws-server/Dockerfile.vercel) 是共用的生产容器定义，[`vercel.json`](ws-server/vercel.json) 则选择 Container 框架并启用 Fluid compute；两者都不会构建、复制或托管根目录 Vite 前端。
 
-For a Git-connected Vercel project, set **Root Directory** to `ws-server` and **Framework Preset** to **Other**. For a CLI Preview, run these commands from the repository root:<br>
-通过 Git 连接 Vercel 项目时，请将 **Root Directory** 设为 `ws-server`，并将 **Framework Preset** 设为 **Other**。如需通过 CLI 创建 Preview，请在仓库根目录执行：
+For a Git-connected Vercel project, set **Root Directory** to `ws-server`, **Framework Preset** to **Container**, and the non-secret `PORT` environment variable to `8080`. For a CLI Preview, run these commands from the repository root:<br>
+通过 Git 连接 Vercel 项目时，请将 **Root Directory** 设为 `ws-server`、将 **Framework Preset** 设为 **Container**，并把非机密环境变量 `PORT` 设为 `8080`。如需通过 CLI 创建 Preview，请在仓库根目录执行：
 
 ```bash
 npx vercel login
-npx vercel ws-server
+npx vercel --cwd ws-server --env PORT=8080
 ```
 
-The Preview command deploys only the child Node.js project and creates an endpoint for manually validating `/health`, the `/ws` rewrite, and the WebSocket handshake. Vercel never replaces the GitHub Pages frontend deployment.<br>
-上方 Preview 命令只部署 Node.js 子项目，并创建一个可手动验证 `/health`、`/ws` 重写与 WebSocket 握手的端点；Vercel 永远不会取代 GitHub Pages 前端部署。
+When GitHub Actions owns production deployment, disable the Vercel project's automatic Git deployment so one merge cannot create two production deployments.<br>
+当 GitHub Actions 负责生产部署时，请关闭该 Vercel 项目的自动 Git 部署，以免一次合并产生两次生产部署。
+
+The Preview command deploys only the child Node.js container and creates an endpoint for manually validating `/health` and the `/ws` WebSocket handshake. Vercel never replaces the GitHub Pages frontend deployment.<br>
+上方 Preview 命令只部署 Node.js 子容器，并创建一个可手动验证 `/health` 与 `/ws` WebSocket 握手的端点；Vercel 永远不会取代 GitHub Pages 前端部署。
+
+Vercel builds `Dockerfile.vercel` into its own Vercel Container Registry and runs it as a stateless container Function. The release workflow separately builds the same file for GHCR; Vercel does not pull or deploy that GHCR image.<br>
+Vercel 会把 `Dockerfile.vercel` 构建到其自有的 Vercel Container Registry，并作为无状态容器 Function 运行。发布流水线会另行使用同一文件构建 GHCR 镜像；Vercel 不会拉取或部署该 GHCR 镜像。
 
 Vercel can place WebSocket clients on different Function instances and can recycle an instance at its duration limit. A public deployment therefore needs durable room and match coordination through Redis plus client reconnection. The current in-memory runtime is suitable only for local single-process development; even a Vercel Preview deployment does not guarantee correct multiplayer routing or recovery.<br>
 Vercel 可能把 WebSocket 客户端分配到不同的 Function 实例，也可能在运行时限到达后回收实例。因此公开部署需要使用 Redis 持久协调房间与比赛状态，并在客户端实现断线重连。当前纯内存运行时仅适合本地单进程开发；即使是 Vercel Preview 部署，也无法保证多人路由与恢复行为正确。
@@ -191,15 +197,22 @@ Vercel 可能把 WebSocket 客户端分配到不同的 Function 实例，也可�
 Each match has a 290-second time limit and may end earlier when a team reaches the score limit; the WebSocket Function is capped at 300 seconds. Vercel measures that cap from the initial socket connection, not from match start, so time spent registering, inviting, or waiting in a room consumes the same limit; the 10-second numerical margin alone cannot guarantee a complete match.<br>
 每局比赛时限为 290 秒，并可在一方达到得分上限时提前结束；WebSocket Function 上限为 300 秒。Vercel 从首次建立连接时开始计算时限，而不是从比赛开始时计算，因此注册、邀请与房间等待都会消耗同一时限；仅有数值上的 10 秒余量无法保证完成整局比赛。
 
-Run a production deployment only after Redis-backed coordination, reconnect and resume support, abuse controls, and a real two-client Preview smoke test are complete.<br>
-只有在完成 Redis 协调、断线重连与恢复、防滥用控制，以及真实 Preview 双客户端冒烟测试之后，才应执行生产部署。
-
-After a managed endpoint is ready, set the repository variable below. Pull request and release builds pass it to Vite, allowing the GitHub Pages frontend to connect without hard-coding a deployment domain.<br>
-托管端点准备就绪后，请设置下方仓库变量。Pull Request 与发布构建会把它传给 Vite，使 GitHub Pages 前端无需硬编码部署域名即可连接。
+After a stable production endpoint is ready, set the repository variable below. Pull request and release builds pass it to Vite, allowing the GitHub Pages frontend to open a cross-origin WSS connection without hard-coding a deployment domain.<br>
+稳定的生产端点准备就绪后，请设置下方仓库变量。Pull Request 与发布构建会把它传给 Vite，使 GitHub Pages 前端无需硬编码部署域名即可建立跨域 WSS 连接。
 
 ```bash
 gh variable set MYCF_WS_URL --body "https://<project>.vercel.app"
 ```
+
+To let the merge workflow deploy the container Function, add `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` secrets to the `vercel-production` GitHub environment or repository, then enable the credential-gated job:<br>
+如需让合并流水线部署容器 Function，请先在 `vercel-production` GitHub 环境或仓库中添加 `VERCEL_TOKEN`、`VERCEL_ORG_ID` 与 `VERCEL_PROJECT_ID` 密钥，再启用受凭据保护的任务：
+
+```bash
+gh variable set VERCEL_DEPLOY_ENABLED --body "true"
+```
+
+Until that variable is enabled, Vercel deployment is skipped while GitHub Release, GHCR, and Pages continue normally. Once enabled, CI stages only `ws-server`, verifies `/health` and `/ws` with the GitHub Pages browser origin, and promotes the deployment only after both checks pass.<br>
+在该变量启用之前，流水线会跳过 Vercel 部署，而 GitHub Release、GHCR 与 Pages 仍会正常执行。启用后，CI 只暂存部署 `ws-server`，使用 GitHub Pages 浏览器来源验证 `/health` 与 `/ws`，并仅在两项检查均通过后提升为生产版本。
 
 ## CI, release and deployment · 持续集成、发布与部署
 
@@ -207,9 +220,9 @@ gh variable set MYCF_WS_URL --body "https://<project>.vercel.app"
 
 [Pull Request CI](.github/workflows/ci.yml) 会维护一条实时英文状态评论、安装依赖、运行全部测试并验证生产构建。评论会从开始状态原地更新为最终结果，并且旧运行无法覆盖较新的运行。
 
-After code reaches `main`, the [release workflow](.github/workflows/release.yml) calculates the next semantic version, creates the static `mycf-vX.Y.Z-dist.tar.gz`, publishes a GitHub Release, and then publishes the WebSocket-server amd64 GHCR image and GitHub Pages frontend in parallel.
+After code reaches `main`, the [release workflow](.github/workflows/release.yml) calculates the next semantic version, creates the static `mycf-vX.Y.Z-dist.tar.gz`, publishes a GitHub Release, publishes the WebSocket-server amd64 GHCR image, optionally deploys the same container definition to Vercel, and deploys the GitHub Pages frontend.
 
-代码进入 `main` 后，[release workflow](.github/workflows/release.yml) 会计算下一个语义版本、生成静态 `mycf-vX.Y.Z-dist.tar.gz`、发布 GitHub Release，然后并行发布 WebSocket 服务 amd64 GHCR 镜像与 GitHub Pages 前端。
+代码进入 `main` 后，[release workflow](.github/workflows/release.yml) 会计算下一个语义版本、生成静态 `mycf-vX.Y.Z-dist.tar.gz`、发布 GitHub Release、发布 WebSocket 服务 amd64 GHCR 镜像、按配置把同一容器定义部署到 Vercel，并部署 GitHub Pages 前端。
 
 ```text
 main updated / main 更新
@@ -217,7 +230,8 @@ main updated / main 更新
   │    → mycf-vX.Y.Z-dist.tar.gz + GitHub Release / 发布归档与 Release
   │         └→ static dist / 静态 dist → GitHub Pages deploy / GitHub Pages 部署
   └→ ws-server install + tests + checks / WS 服务安装 + 测试 + 检查
-       → WebSocket server image / WebSocket 服务镜像 → ghcr.io/wl4g-games/mycf
+       ├→ Dockerfile.vercel → WebSocket server image / WebSocket 服务镜像 → ghcr.io/wl4g-games/mycf
+       └→ Dockerfile.vercel → Vercel Container Registry → Vercel container Function / Vercel 容器 Function
 ```
 
 The detailed versioning and pipeline rules are documented in [CI/CD Architecture](.github/workflows/README.md). GitHub Pages must use **GitHub Actions** as its deployment source.
@@ -228,8 +242,8 @@ The detailed versioning and pipeline rules are documented in [CI/CD Architecture
 
 - **Static frontend · 静态前端：** GitHub Pages remains the top-of-document experience link and is the only CI-deployed frontend; it uses `VITE_MYCF_WS_URL` when a managed multiplayer endpoint is configured.<br>
   GitHub Pages 继续作为文档顶部的体验链接，也是 CI 唯一部署的前端；配置托管多人端点后，它会通过 `VITE_MYCF_WS_URL` 使用网络模式。
-- **Independent Vercel service · 独立 Vercel 服务：** Vercel receives only the `ws-server` Node.js child project, never the Vite frontend or `dist/` artifact; Fluid compute must remain enabled.<br>
-  Vercel 只接收 `ws-server` Node.js 子项目，绝不接收 Vite 前端或 `dist/` 制品；Fluid compute 必须保持启用。
+- **Independent Vercel service · 独立 Vercel 服务：** Vercel receives only the `ws-server` container project, builds `Dockerfile.vercel` into VCR, and never receives the Vite frontend or `dist/` artifact; Fluid compute must remain enabled.<br>
+  Vercel 只接收 `ws-server` 容器项目，把 `Dockerfile.vercel` 构建到 VCR，绝不接收 Vite 前端或 `dist/` 制品；Fluid compute 必须保持启用。
 - **Bounded match · 有限局时：** The authoritative server and both solo and online clients use the same 290-second maximum match time, with score-limit victories allowed earlier.<br>
   权威服务端、单机客户端与网络客户端统一使用 290 秒最大比赛时限，并允许达到得分上限时提前获胜。
 - **Durable multiplayer state · 持久多人状态：** Public scale-out must not rely on Function memory for aliases, presence, invitations, rooms, or authoritative matches.<br>

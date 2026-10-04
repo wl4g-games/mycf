@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { WEAPONS } from "../src/config.js";
+import { createCombatTracer } from "../src/combat-tracer.js";
 import { GameState } from "../src/game.js";
 import { NetworkGameState } from "../src/network-game.js";
 
@@ -8,13 +10,13 @@ function audioSpy() {
   const calls = [];
   return {
     calls,
-    distantShot: profile => calls.push(["distantShot", profile]),
+    distantShot: (profile, range) => calls.push(["distantShot", profile, range]),
     gunshot: profile => calls.push(["gunshot", profile]),
     knife: profile => calls.push(["knife", profile]),
   };
 }
 
-test("solo emits one semantic shot event only for an accepted local attack", () => {
+test("solo emits a traced shot for every accepted actor attack and none for rejected attacks", () => {
   const audio = audioSpy();
   const events = [];
   const game = new GameState(audio, (type, payload) => events.push({ type, payload }));
@@ -33,18 +35,38 @@ test("solo emits one semantic shot event only for an accepted local attack", () 
   game.attack(game.player);
 
   const shots = events.filter(event => event.type === "shot");
-  assert.deepEqual(shots, [{
-    type: "shot",
-    payload: {
-      actorId: game.player.id,
-      weaponId: "barrett",
-      profile: "sniper",
-    },
-  }]);
-  assert.deepEqual(audio.calls, [["gunshot", "sniper"]]);
+  assert.equal(shots.length, 2);
+  assert.equal(shots[0].payload.actorId, bot.id);
+  assert.equal(shots[1].payload.actorId, game.player.id);
+  assert.deepEqual(shots.map(event => event.payload.weaponId), [bot.weaponId, "barrett"]);
+  for (const { payload } of shots) {
+    assert.equal(payload.type, "shot");
+    assert.ok(Number.isFinite(payload.from.x));
+    assert.ok(Number.isFinite(payload.from.y));
+    assert.ok(Number.isFinite(payload.to.x));
+    assert.ok(Number.isFinite(payload.to.y));
+  }
+  assert.equal(audio.calls[0][0], "distantShot");
+  assert.deepEqual(audio.calls.at(-1), ["gunshot", "sniper"]);
 });
 
-test("network relays an authoritative local shot while preserving shot audio", () => {
+test("solo bot hit and miss decisions produce matching authoritative tracer events", () => {
+  const events = [];
+  const game = new GameState(audioSpy(), (type, payload) => events.push({ type, payload }));
+  const bot = game.actors.find(actor => actor.isBot && actor.team !== game.player.team);
+  const weapon = WEAPONS[bot.weaponId];
+  const initialHealth = game.player.health;
+
+  game.commitShot(bot, weapon, null, weapon.damage * .34);
+  game.commitShot(bot, weapon, game.player, weapon.damage * .34);
+
+  const shots = events.filter(event => event.type === "shot").map(event => event.payload);
+  assert.deepEqual(shots.map(shot => shot.hit), [false, true]);
+  assert.deepEqual(shots.map(shot => shot.victimId), [null, game.player.id]);
+  assert.ok(game.player.health < initialHealth);
+});
+
+test("network relays authoritative local and incoming shots with confirmed injury feedback", () => {
   const audio = audioSpy();
   const events = [];
   const game = new NetworkGameState(
@@ -52,6 +74,7 @@ test("network relays an authoritative local shot while preserving shot audio", (
     audio,
     (type, payload) => events.push({ type, payload }),
   );
+  game.player = { id: "seal-0", x: 0, y: 0, weaponId: "barrett" };
 
   game.handleCombatEvent({
     type: "shot",
@@ -59,6 +82,11 @@ test("network relays an authoritative local shot while preserving shot audio", (
     userId: "human-1",
     weaponId: "barrett",
     profile: "sniper",
+    team: "seal",
+    victimId: null,
+    hit: false,
+    from: { x: 0, y: 0, z: .68 },
+    to: { x: 8, y: 0, z: .58 },
   });
   game.handleCombatEvent({
     type: "shot",
@@ -66,14 +94,47 @@ test("network relays an authoritative local shot while preserving shot audio", (
     userId: "human-2",
     weaponId: "ak47",
     profile: "rifle",
+    team: "terror",
+    victimId: "seal-0",
+    hit: true,
+    from: { x: 3, y: 4, z: .68 },
+    to: { x: 0, y: 0, z: .58 },
   });
 
-  assert.deepEqual(events, [{
-    type: "shot",
-    payload: { actorId: "seal-0", weaponId: "barrett", profile: "sniper" },
-  }]);
-  assert.deepEqual(audio.calls, [["gunshot", "sniper"], ["distantShot", "rifle"]]);
+  assert.equal(events.length, 2);
+  assert.deepEqual(events.map(event => event.payload.actorId), ["seal-0", "terror-0"]);
+  assert.deepEqual(events[1].payload.to, { x: 0, y: 0, z: .58 });
+  assert.equal(createCombatTracer(events[1].payload, "seal-0").incomingHit, true);
+  assert.deepEqual(audio.calls, [["gunshot", "sniper"], ["distantShot", "rifle", 5]]);
   assert.equal(game.shake, .48);
+  assert.equal(game.flash, .28);
+});
+
+test("remote melee presentation does not reuse a distant firearm sound", () => {
+  const audio = audioSpy();
+  const events = [];
+  const game = new NetworkGameState(
+    { self: { id: "human-1" } },
+    audio,
+    (type, payload) => events.push({ type, payload }),
+  );
+  game.player = { id: "seal-0", x: 0, y: 0, weaponId: "barrett" };
+
+  game.handleCombatEvent({
+    type: "shot",
+    actorId: "terror-0",
+    userId: "human-2",
+    weaponId: "axe",
+    profile: "axe",
+    team: "terror",
+    victimId: null,
+    hit: false,
+    from: { x: 1, y: 1, z: .68 },
+    to: { x: 1.5, y: 1.5, z: .58 },
+  });
+
+  assert.equal(events.length, 1);
+  assert.deepEqual(audio.calls, []);
 });
 
 test("suspending a network match immediately clears latched movement and fire", () => {

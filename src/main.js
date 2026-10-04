@@ -1,11 +1,11 @@
-import { LOADOUTS, MAPS, TEAM, THROWABLES, WEAPONS } from "./config.js?v=20261004-fps-v3";
-import { GameAudio } from "./audio.js?v=20261004-fps-v3";
-import { GameState } from "./game.js?v=20261004-fps-v3";
-import { applyDocumentTranslations, onLocaleChange, t, toggleLocale } from "./i18n.js?v=20261004-fps-v3";
-import { InputController } from "./input.js?v=20261004-fps-v3";
-import { NetworkClient } from "./network.js?v=20261004-fps-v3";
-import { NetworkGameState } from "./network-game.js?v=20261004-fps-v3";
-import { Renderer } from "./renderer.js?v=20261004-fps-v3";
+import { LOADOUTS, MAPS, TEAM, THROWABLES, WEAPONS } from "./config.js?v=20261004-fps-v4";
+import { GameAudio } from "./audio.js?v=20261004-fps-v4";
+import { GameState } from "./game.js?v=20261004-fps-v4";
+import { applyDocumentTranslations, onLocaleChange, t, toggleLocale } from "./i18n.js?v=20261004-fps-v4";
+import { InputController } from "./input.js?v=20261004-fps-v4";
+import { NetworkClient } from "./network.js?v=20261004-fps-v4";
+import { NetworkGameState } from "./network-game.js?v=20261004-fps-v4";
+import { Renderer } from "./renderer.js?v=20261004-fps-v4";
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => Array.from(document.querySelectorAll(selector));
@@ -34,8 +34,9 @@ let pendingInvite = null;
 
 function handleGameEvent(type, payload) {
   if (type === "shot") {
-    renderer.triggerShot(payload);
-    if (payload.profile !== "knife" && payload.profile !== "axe") pulseReticleFlash();
+    const localPlayerId = game.player?.id;
+    renderer.triggerShot(payload, localPlayerId);
+    if (payload.actorId === localPlayerId && payload.profile !== "knife" && payload.profile !== "axe") pulseReticleFlash();
   }
   if (type === "announce") announce(localizeAnnouncement(payload));
   if (type === "death") {
@@ -228,6 +229,7 @@ function begin() {
 function enterBattle() {
   paused = false;
   modalMode = "pause";
+  renderer.resetCombatEffects();
   landing.classList.add("is-hidden");
   hud.classList.remove("is-hidden");
   hideModal();

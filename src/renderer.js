@@ -1,6 +1,8 @@
-import { FOV, MAPS, SCOPED_FOV, TEAM, THROWABLES, clamp, normalizeAngle, tileAt } from "./config.js?v=20261004-fps-v3";
-import { MotionTracker, gaitPose } from "./render-animation.js?v=20261004-fps-v3";
-import { WeaponViewmodel } from "./weapon-viewmodel.js?v=20261004-fps-v3";
+import { FOV, MAPS, SCOPED_FOV, TEAM, THROWABLES, clamp, normalizeAngle, tileAt } from "./config.js?v=20261004-fps-v4";
+import { MotionTracker, gaitPose } from "./render-animation.js?v=20261004-fps-v4";
+import { WeaponViewmodel } from "./weapon-viewmodel.js?v=20261004-fps-v4";
+import { cameraHorizon } from "./camera.js?v=20261004-fps-v4";
+import { CombatTracerSystem } from "./combat-tracer.js?v=20261004-fps-v4";
 
 const TEAM_COLORS = {
   seal: { main: "#2ca9df", shade: "#155d91", light: "#75dcff", gear: "#17394f" },
@@ -44,6 +46,7 @@ export class Renderer {
     this.backdropCache = new Map();
     this.motionTracker = new MotionTracker();
     this.weaponViewmodel = new WeaponViewmodel();
+    this.combatTracers = new CombatTracerSystem();
     this.animationTime = 0;
     this.backgrounds = {};
     Object.values(MAPS).forEach(map => {
@@ -73,6 +76,7 @@ export class Renderer {
     const animationDelta = clamp(Number(dt) || 0, 0, .05);
     this.animationTime += animationDelta;
     this.weaponViewmodel.advance(animationDelta);
+    this.combatTracers.advance(animationDelta);
     const actorIds = new Set();
     for (const actor of game.actors) {
       if (!actor.alive) continue;
@@ -83,7 +87,7 @@ export class Renderer {
     const ctx = this.context;
     const fov = game.player.scoped ? SCOPED_FOV : FOV;
     const focal = this.width / (2 * Math.tan(fov / 2));
-    const horizon = this.height * .45;
+    const horizon = cameraHorizon(this.height, game.player.pitch);
     const shake = game.shake > 0 ? game.shake * 5 : 0;
     ctx.save();
     ctx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake);
@@ -92,6 +96,7 @@ export class Renderer {
     this.drawWalls(game, fov, focal, horizon);
     this.drawWorldSprites(game, focal, horizon, fov);
     this.drawAtmosphere(game, horizon);
+    this.drawCombatTracers(game, focal, horizon, fov);
     this.drawWeapon(game);
     if (game.flash > 0) {
       ctx.fillStyle = `rgba(255,74,76,${game.flash * .42})`;
@@ -101,18 +106,29 @@ export class Renderer {
     this.drawRadar(game);
   }
 
-  triggerShot(payload) { this.weaponViewmodel.triggerShot(payload); }
+  triggerShot(payload, localPlayerId) {
+    this.combatTracers.trigger(payload, localPlayerId);
+    if (payload.actorId === localPlayerId) this.weaponViewmodel.triggerShot(payload);
+  }
+
+  resetCombatEffects() {
+    this.combatTracers.clear();
+  }
 
   drawBackdrop(game, horizon) {
     const ctx = this.context;
     const image = this.backgrounds[game.map.id];
     if (image && image.complete && image.naturalWidth) {
       const panoramaWidth = this.width * 2.05;
+      const neutralHorizon = this.height * .45;
+      const verticalOffset = horizon - neutralHorizon;
       const normalized = ((game.player.angle / (Math.PI * 2)) % 1 + 1) % 1;
       const offset = -normalized * panoramaWidth;
-      const backdrop = this.getBackdrop(game.map.id, image, panoramaWidth, horizon * 1.7);
-      ctx.drawImage(backdrop, offset, 0);
-      ctx.drawImage(backdrop, offset + panoramaWidth, 0);
+      const backdrop = this.getBackdrop(game.map.id, image, panoramaWidth, neutralHorizon * 1.7);
+      ctx.fillStyle = game.map.theme === "city" ? "#3ac2f3" : "#52cde5";
+      ctx.fillRect(0, 0, this.width, Math.max(0, verticalOffset));
+      ctx.drawImage(backdrop, offset, verticalOffset);
+      ctx.drawImage(backdrop, offset + panoramaWidth, verticalOffset);
       const wash = ctx.createLinearGradient(0, 0, 0, horizon);
       wash.addColorStop(0, "rgba(44,176,239,.02)");
       wash.addColorStop(1, game.map.theme === "city" ? "rgba(18,64,94,.32)" : "rgba(28,89,57,.28)");
@@ -292,6 +308,121 @@ export class Renderer {
       ground: horizon + focal * .5 / Math.max(.01, forward),
       unit: focal / Math.max(.01, forward),
     };
+  }
+
+  tracerCameraPoint(point, player) {
+    const dx = point.x - player.x;
+    const dy = point.y - player.y;
+    return {
+      forward: dx * Math.cos(player.angle) + dy * Math.sin(player.angle),
+      lateral: -dx * Math.sin(player.angle) + dy * Math.cos(player.angle),
+      height: point.z - .5,
+    };
+  }
+
+  projectTracerPoint(point, focal, horizon) {
+    return {
+      x: this.width / 2 + point.lateral / point.forward * focal,
+      y: horizon - point.height / point.forward * focal,
+    };
+  }
+
+  tracerSegment(trace, game, focal, horizon, fov) {
+    const player = game.player;
+    const near = .12;
+    const target = this.tracerCameraPoint(trace.to, player);
+    if (trace.actorId === player.id) {
+      if (target.forward <= near) return null;
+      const muzzle = this.weaponViewmodel.muzzlePosition(
+        game,
+        this.width,
+        this.height,
+        this.motionTracker.get(player.id),
+      );
+      return {
+        start: muzzle || { x: this.width / 2, y: this.height / 2 },
+        end: this.projectTracerPoint(target, focal, horizon),
+      };
+    }
+
+    let source = this.tracerCameraPoint(trace.from, player);
+    if (trace.incomingHit) {
+      const end = { x: this.width / 2, y: this.height / 2 };
+      if (source.forward > near) return { start: this.projectTracerPoint(source, focal, horizon), end };
+      const direction = normalizeAngle(Math.atan2(trace.from.y - player.y, trace.from.x - player.x) - player.angle);
+      return {
+        start: {
+          x: direction < 0 ? this.width * .08 : this.width * .92,
+          y: clamp(horizon - Math.cos(direction) * this.height * .08, this.height * .2, this.height * .76),
+        },
+        end,
+      };
+    }
+
+    if (source.forward <= near && target.forward <= near) return null;
+    if (source.forward <= near || target.forward <= near) {
+      const behind = source.forward <= near ? source : target;
+      const ahead = source.forward <= near ? target : source;
+      const ratio = (near - behind.forward) / (ahead.forward - behind.forward);
+      const clipped = {
+        forward: near,
+        lateral: behind.lateral + (ahead.lateral - behind.lateral) * ratio,
+        height: behind.height + (ahead.height - behind.height) * ratio,
+      };
+      if (source.forward <= near) source = clipped;
+      else Object.assign(target, clipped);
+    }
+    const start = this.projectTracerPoint(source, focal, horizon);
+    const end = this.projectTracerPoint(target, focal, horizon);
+    const margin = this.width * Math.tan(fov * .18);
+    if ((start.x < -margin && end.x < -margin) || (start.x > this.width + margin && end.x > this.width + margin)) return null;
+    return { start, end };
+  }
+
+  drawCombatTracers(game, focal, horizon, fov) {
+    const ctx = this.context;
+    for (const trace of this.combatTracers.items) {
+      const segment = this.tracerSegment(trace, game, focal, horizon, fov);
+      if (!segment) continue;
+      const alpha = clamp(trace.life / trace.maxLife, 0, 1);
+      const gradient = ctx.createLinearGradient(segment.start.x, segment.start.y, segment.end.x, segment.end.y);
+      gradient.addColorStop(0, "rgba(255,247,177,.96)");
+      gradient.addColorStop(.62, "rgba(255,181,64,.94)");
+      gradient.addColorStop(1, trace.incomingHit ? "rgba(255,47,74,.98)" : "rgba(255,112,49,.9)");
+      ctx.save();
+      ctx.lineCap = "round";
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = gradient;
+      ctx.shadowColor = trace.incomingHit ? "#ff304f" : "#ffb238";
+      ctx.shadowBlur = trace.profile === "sniper" ? 18 : 11;
+      ctx.lineWidth = trace.profile === "sniper" ? 7 : 4.5;
+      ctx.beginPath();
+      ctx.moveTo(segment.start.x, segment.start.y);
+      ctx.lineTo(segment.end.x, segment.end.y);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = "rgba(255,255,231,.98)";
+      ctx.lineWidth = trace.profile === "sniper" ? 2.2 : 1.35;
+      ctx.stroke();
+      if (trace.incomingHit) this.drawInjuryImpact(segment.end, alpha);
+      ctx.restore();
+    }
+  }
+
+  drawInjuryImpact(point, alpha) {
+    const ctx = this.context;
+    const radius = Math.max(34, this.height * .075);
+    const glow = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, radius);
+    glow.addColorStop(0, `rgba(255,48,68,${.3 * alpha})`);
+    glow.addColorStop(.3, `rgba(255,57,75,${.15 * alpha})`);
+    glow.addColorStop(1, "rgba(255,57,75,0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(point.x - radius, point.y - radius, radius * 2, radius * 2);
+    ctx.strokeStyle = `rgba(255,91,104,${.62 * alpha})`;
+    ctx.lineWidth = Math.max(2, this.height * .004);
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, radius * .3, -.72, .72);
+    ctx.stroke();
   }
 
   drawActor({ sprite, x, ground, unit, forward }) {

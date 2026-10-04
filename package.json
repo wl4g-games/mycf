@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --test test/*.test.js",
-    "check": "node --check .github/scripts/upsert-pr-ci-comment.mjs && node --check src/i18n.js && node --check src/locales/en.js && node --check src/locales/zh-CN.js && node --check src/main.js && node --check src/input.js && node --check src/network.js && node --check src/network-game.js && node --check src/game.js && node --check src/render-animation.js && node --check src/weapon-viewmodel.js && node --check src/renderer.js && npm --prefix ws-server run check"
+    "check": "node --check .github/scripts/upsert-pr-ci-comment.mjs && node --check src/camera.js && node --check src/combat-tracer.js && node --check src/i18n.js && node --check src/locales/en.js && node --check src/locales/zh-CN.js && node --check src/main.js && node --check src/input.js && node --check src/network.js && node --check src/network-game.js && node --check src/game.js && node --check src/render-animation.js && node --check src/shot-geometry.js && node --check src/weapon-viewmodel.js && node --check src/renderer.js && npm --prefix ws-server run check"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"

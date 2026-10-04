@@ -1,7 +1,9 @@
 import {
   BOT_NAMES, GAME_MODES, LOADOUTS, MAPS, MATCH_TIME, TEAM, THROWABLES, WEAPONS,
   clamp, distance, isSolid, normalizeAngle, spawnCells,
-} from "./config.js?v=20261004-fps-v3";
+} from "./config.js?v=20261004-fps-v4";
+import { applyCameraPitch } from "./camera.js?v=20261004-fps-v4";
+import { createShotEvent } from "./shot-geometry.js?v=20261004-fps-v4";
 
 const TEAMS = [TEAM.SEAL, TEAM.TERROR];
 const randomItem = list => list[Math.floor(Math.random() * list.length)];
@@ -64,6 +66,7 @@ export class GameState {
           x: x + .5,
           y: y + .5,
           angle: team === TEAM.SEAL ? -Math.PI / 2 : Math.PI / 2,
+          pitch: 0,
           health: 100,
           alive: true,
           respawn: 0,
@@ -100,6 +103,7 @@ export class GameState {
     this.flash = Math.max(0, this.flash - dt * 3);
     this.tank.cooldown = Math.max(0, this.tank.cooldown - dt);
     this.player.angle = normalizeAngle(this.player.angle + input.yaw);
+    this.player.pitch = applyCameraPitch(this.player.pitch, input.pitch);
     if (this.tank.driverId === this.player.id) this.tank.turretAngle = this.player.angle;
 
     for (const action of input.items) this.handleAction(action);
@@ -178,15 +182,21 @@ export class GameState {
     if (!actor.alive || actor.cooldown > 0) return;
     const weapon = WEAPONS[actor.weaponId] || WEAPONS.ak47;
     actor.cooldown = weapon.interval;
+    const spread = actor.scoped && weapon.scopedSpread != null ? weapon.scopedSpread : weapon.spread;
+    const victim = this.findTargetInArc(actor, weapon.range, spread);
     if (actor.isPlayer) {
       if (weapon.visual === "knife" || weapon.visual === "axe") this.audio.knife(weapon.visual);
       else this.audio.gunshot(weapon.visual);
       this.shake = weapon.visual === "sniper" ? .48 : weapon.visual === "machinegun" ? .24 : .16;
-      this.emit("shot", { actorId: actor.id, weaponId: weapon.id, profile: weapon.visual });
+    } else if (weapon.visual !== "knife" && weapon.visual !== "axe") {
+      this.audio.distantShot(weapon.visual, distance(this.player, actor));
     }
-    const spread = actor.scoped && weapon.scopedSpread != null ? weapon.scopedSpread : weapon.spread;
-    const victim = this.findTargetInArc(actor, weapon.range, spread);
-    if (victim) this.damage(victim, weapon.damage, actor, weapon.id);
+    this.commitShot(actor, weapon, victim, weapon.damage);
+  }
+
+  commitShot(actor, weapon, victim, damage = 0) {
+    this.emit("shot", createShotEvent(this.map, actor, weapon, victim));
+    if (victim && damage > 0) this.damage(victim, damage, actor, weapon.id);
   }
 
   findTargetInArc(actor, range, margin) {
@@ -300,7 +310,9 @@ export class GameState {
       const weapon = WEAPONS[bot.weaponId] || WEAPONS.ak47;
       if (visible && targetDistance < weapon.range && Math.abs(normalizeAngle(Math.atan2(target.y - bot.y, target.x - bot.x) - bot.angle)) < .2 && bot.cooldown <= 0) {
         bot.cooldown = Math.max(.16, weapon.interval * 2.8 + Math.random() * .45);
-        if (Math.random() < clamp(.78 - targetDistance * .035, .2, .72)) this.damage(target, weapon.damage * .34, bot, weapon.id);
+        const victim = Math.random() < clamp(.78 - targetDistance * .035, .2, .72) ? target : null;
+        if (weapon.visual !== "knife" && weapon.visual !== "axe") this.audio.distantShot(weapon.visual, targetDistance);
+        this.commitShot(bot, weapon, victim, weapon.damage * .34);
       }
       if (Math.random() < dt * .008 && targetDistance < 10) this.throwGrenade(bot);
     }

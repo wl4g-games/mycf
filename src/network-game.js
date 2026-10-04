@@ -1,4 +1,5 @@
-import { GAME_MODES, LOADOUTS, MAPS, MATCH_TIME, TEAM, THROWABLES, WEAPONS, distance, isSolid, normalizeAngle, spawnCells } from "./config.js?v=20261004-fps-v3";
+import { GAME_MODES, LOADOUTS, MAPS, MATCH_TIME, TEAM, THROWABLES, WEAPONS, distance, isSolid, normalizeAngle, spawnCells } from "./config.js?v=20261004-fps-v4";
+import { applyCameraPitch } from "./camera.js?v=20261004-fps-v4";
 
 export class NetworkGameState {
   constructor(client, audio, emit = () => {}) {
@@ -10,6 +11,7 @@ export class NetworkGameState {
     this.pendingActions = [];
     this.sendClock = 0;
     this.localAngle = 0;
+    this.localPitch = 0;
     this.hitMarker = 0;
     this.shake = 0;
     this.flash = 0;
@@ -35,6 +37,7 @@ export class NetworkGameState {
       x: spawn[0] + .5,
       y: spawn[1] + .5,
       angle: this.assignment.team === TEAM.SEAL ? -Math.PI / 2 : Math.PI / 2,
+      pitch: 0,
       health: 100,
       alive: true,
       scoped: false,
@@ -46,6 +49,7 @@ export class NetworkGameState {
     };
     this.actors = [this.player];
     this.localAngle = this.player.angle;
+    this.localPitch = 0;
     this.time = Number(payload.duration) || MATCH_TIME;
     this.tank = { ...this.map.tank, turretAngle: this.map.tank.angle, health: 100, occupied: false, driverId: null, speed: 0 };
     this.started = true;
@@ -73,6 +77,7 @@ export class NetworkGameState {
     if (!previousAlive && this.player.alive) this.emit("respawn");
     if (Math.abs(normalizeAngle(this.localAngle - this.player.angle)) > .75) this.localAngle = this.player.angle;
     this.player.angle = this.localAngle;
+    this.player.pitch = this.localPitch;
   }
 
   handleCombatEvent(event) {
@@ -81,14 +86,19 @@ export class NetworkGameState {
         if (event.profile === "knife" || event.profile === "axe") this.audio.knife(event.profile);
         else this.audio.gunshot(event.profile);
         this.shake = event.profile === "sniper" ? .48 : event.profile === "machinegun" ? .25 : .18;
-        this.emit("shot", {
-          actorId: event.actorId,
-          weaponId: event.weaponId || this.player?.weaponId,
-          profile: event.profile,
-        });
       } else {
-        this.audio.distantShot(event.profile, 12);
+        const range = event.from && this.player
+          ? Math.hypot(event.from.x - this.player.x, event.from.y - this.player.y)
+          : 12;
+        if (event.profile !== "knife" && event.profile !== "axe") {
+          this.audio.distantShot(event.profile, range);
+        }
       }
+      if (event.hit && event.victimId === this.player?.id) this.flash = Math.max(this.flash, .28);
+      this.emit("shot", {
+        ...event,
+        weaponId: event.weaponId || this.player?.weaponId,
+      });
     }
     if (event.type === "tank_shot") { this.audio.tankShot(); this.shake = 1; }
     if (event.type === "explosion") { this.audio.explosion(event.explosionType); this.shake = Math.max(this.shake, .78); }
@@ -101,7 +111,9 @@ export class NetworkGameState {
     this.shake = Math.max(0, this.shake - dt * 3);
     this.flash = Math.max(0, this.flash - dt * 3);
     this.localAngle = normalizeAngle(this.localAngle + input.yaw);
+    this.localPitch = applyCameraPitch(this.localPitch, input.pitch);
     this.player.angle = this.localAngle;
+    this.player.pitch = this.localPitch;
     this.pendingActions.push(...input.items);
     this.predict(dt, input.movement);
     this.sendClock += dt;
