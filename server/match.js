@@ -81,7 +81,7 @@ export class AuthoritativeMatch {
           id: `${team}-${index}`,
           userId: null,
           isBot: true,
-          name: rawName === "你" ? "RANGER" : rawName,
+          name: rawName,
           team,
           index,
           x: x + .5,
@@ -235,7 +235,7 @@ export class AuthoritativeMatch {
     this.emit({ type: "shot", actorId: actor.id, userId: actor.userId, profile: weapon.visual });
     const spread = actor.scoped && weapon.scopedSpread != null ? weapon.scopedSpread : weapon.spread;
     const victim = this.findTargetInArc(actor, weapon.range, spread);
-    if (victim) this.damage(victim, weapon.damage, actor, weapon.name);
+    if (victim) this.damage(victim, weapon.damage, actor, weapon.id);
   }
 
   findTargetInArc(actor, range, margin) {
@@ -343,7 +343,7 @@ export class AuthoritativeMatch {
       const weapon = WEAPONS[bot.weaponId] || WEAPONS.ak47;
       if (visible && targetDistance < weapon.range && Math.abs(normalizeAngle(Math.atan2(target.y - bot.y, target.x - bot.x) - bot.angle)) < .2 && bot.cooldown <= 0) {
         bot.cooldown = Math.max(.16, weapon.interval * 2.8 + Math.random() * .45);
-        if (Math.random() < clamp(.78 - targetDistance * .035, .2, .72)) this.damage(target, weapon.damage * .34, bot, weapon.name);
+        if (Math.random() < clamp(.78 - targetDistance * .035, .2, .72)) this.damage(target, weapon.damage * .34, bot, weapon.id);
       }
       if (Math.random() < dt * .008 && targetDistance < 10) this.throwGrenade(bot);
     }
@@ -379,7 +379,7 @@ export class AuthoritativeMatch {
     for (const actor of this.actors) {
       if (!actor.alive || actor.team === projectile.team) continue;
       const actorDistance = distance(actor, projectile);
-      if (actorDistance < radius && this.hasClearGeometry(projectile, actor)) this.damage(actor, power * (1 - actorDistance / radius), projectile.owner, projectile.type === "shell" ? "坦克主炮" : throwable.name);
+      if (actorDistance < radius && this.hasClearGeometry(projectile, actor)) this.damage(actor, power * (1 - actorDistance / radius), projectile.owner, projectile.type === "shell" ? "tankCannon" : throwable.id);
     }
   }
 

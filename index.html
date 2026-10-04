@@ -1,118 +1,119 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
     <meta name="theme-color" content="#143a57" />
-    <meta name="description" content="泡泡战区：支持单机和网络多人、两张卡通 3D 地图、三套背包及最高 16v16 的原创 H5 射击游戏" />
-    <title>泡泡战区 · Toon Strike</title>
-    <link rel="stylesheet" href="styles.css?v=20261003-v2" />
+    <meta name="description" content="Toon Strike is an original cartoon 3D H5 shooter with solo and online multiplayer, two maps, three loadouts, and battles up to 16v16." data-i18n-content="meta.description" />
+    <title data-i18n="meta.title">Toon Strike</title>
+    <link rel="stylesheet" href="styles.css?v=20261004-i18n" />
   </head>
   <body>
     <main id="game-shell">
-      <canvas id="game" aria-label="游戏画面"></canvas>
+      <canvas id="game" aria-label="Game view" data-i18n-aria-label="canvas.label"></canvas>
 
       <section id="landing" class="landing map-city">
         <div class="landing-shade"></div>
         <header class="brand"><span class="brand-mark">TS</span><span>TOON // STRIKE</span></header>
+        <button type="button" id="language-toggle" class="language-toggle" aria-label="Switch language">Language</button>
 
         <div class="landing-copy">
           <p class="eyebrow">CARTOON 3D BROWSER COMBAT · H5</p>
-          <h1>泡泡<br /><em>战区</em></h1>
-          <p class="lead">在弯弯的泡泡港城或松果山谷展开欢乐交火。<br class="desktop-only" />选择小队规模与作战背包，驾驶卡通坦克冲破防线。</p>
-          <div class="feature-row"><span>2 张卡通地图</span><i></i><span>3 套背包</span><i></i><span>最高 16V16</span></div>
+          <h1><span data-i18n="landing.title.top">TOON</span><br /><em data-i18n="landing.title.bottom">STRIKE</em></h1>
+          <p class="lead" data-i18n="landing.lead">Join the cheerful firefight in Bubble Harbor or Pinecone Valley. Choose a squad size and loadout, then drive a cartoon tank through the front line.</p>
+          <div class="feature-row"><span data-i18n="landing.feature.maps">2 CARTOON MAPS</span><i></i><span data-i18n="landing.feature.loadouts">3 LOADOUTS</span><i></i><span data-i18n="landing.feature.scale">UP TO 16V16</span></div>
         </div>
 
         <aside class="setup-panel">
-          <div class="setup-head"><span>战区部署</span><b id="setup-code">TOON-CITY</b></div>
+          <div class="setup-head"><span data-i18n="setup.title">DEPLOYMENT</span><b id="setup-code">TOON-CITY</b></div>
 
           <section class="setup-group version-group">
-            <p><b>01</b> 选择作战版本</p>
+            <p><b>01</b> <span data-i18n="setup.version.prompt">Choose game type</span></p>
             <div class="version-options">
-              <button type="button" class="version-option" data-version="solo"><strong>单机版</strong><small>除你之外全部由 AI NPC 补位</small></button>
-              <button type="button" class="version-option" data-version="network"><strong>网络版</strong><small>真人房间 · 邀请 · AI 自动补位</small></button>
+              <button type="button" class="version-option" data-version="solo"><strong data-i18n="setup.version.solo">SOLO</strong><small data-i18n="setup.version.solo.description">Every other slot is filled by AI NPCs</small></button>
+              <button type="button" class="version-option" data-version="network"><strong data-i18n="setup.version.network">ONLINE</strong><small data-i18n="setup.version.network.description">Player rooms, invitations, and automatic AI fill</small></button>
             </div>
           </section>
 
           <div id="deployment-options" class="deployment-options is-locked" aria-disabled="true">
             <section class="setup-group">
-              <p><b>02</b> 选择地图</p>
+              <p><b>02</b> <span data-i18n="setup.map.prompt">Choose map</span></p>
               <div class="map-options">
                 <button type="button" class="map-option selected" data-map="city" style="--map-image:url('assets/toon-city.png')">
-                  <span>泡泡港城</span><small>欢乐海港都市战区</small><i>CITY</i>
+                  <span data-i18n="map.city.name">BUBBLE HARBOR</span><small data-i18n="map.city.subtitle">PLAYFUL COASTAL CITY</small><i>CITY</i>
                 </button>
                 <button type="button" class="map-option" data-map="wild" style="--map-image:url('assets/toon-wild.png')">
-                  <span>松果山谷</span><small>卡通野外行动区</small><i>WILDS</i>
+                  <span data-i18n="map.wild.name">PINECONE VALLEY</span><small data-i18n="map.wild.subtitle">CARTOON WILDERNESS</small><i>WILDS</i>
                 </button>
               </div>
             </section>
 
             <section class="setup-group compact">
-              <p><b>03</b> 对战规模</p>
+              <p><b>03</b> <span data-i18n="setup.mode.prompt">Team size</span></p>
               <div class="mode-options">
-                <button type="button" class="mode-option selected" data-mode="4v4"><strong>4V4</strong><small>战术小队</small></button>
-                <button type="button" class="mode-option" data-mode="8v8"><strong>8V8</strong><small>中型交火</small></button>
-                <button type="button" class="mode-option" data-mode="16v16"><strong>16V16</strong><small>全面大战</small></button>
+                <button type="button" class="mode-option selected" data-mode="4v4"><strong>4V4</strong><small data-i18n="mode.4v4.description">TACTICAL SQUAD</small></button>
+                <button type="button" class="mode-option" data-mode="8v8"><strong>8V8</strong><small data-i18n="mode.8v8.description">MEDIUM BATTLE</small></button>
+                <button type="button" class="mode-option" data-mode="16v16"><strong>16V16</strong><small data-i18n="mode.16v16.description">FULL ASSAULT</small></button>
               </div>
             </section>
 
             <section class="setup-group compact">
-              <p><b>04</b> 作战背包</p>
+              <p><b>04</b> <span data-i18n="setup.loadout.prompt">Choose loadout</span></p>
               <div class="loadout-options">
-                <button type="button" class="loadout-option selected" data-loadout="recon"><b>01</b><span><strong>远程猎手</strong><small>巴雷特 · 白壳手枪 · 瑞士军刀 · 烟雾弹</small></span></button>
-                <button type="button" class="loadout-option" data-loadout="raider"><b>02</b><span><strong>突击破阵</strong><small>AK-47 · 白克手枪 · 战斧 · 烟花手雷</small></span></button>
-                <button type="button" class="loadout-option" data-loadout="police"><b>03</b><span><strong>警用火力</strong><small>低后坐力机枪 · 双枪 · 瑞士军刀 · 骷髅手雷</small></span></button>
+                <button type="button" class="loadout-option selected" data-loadout="recon"><b>01</b><span><strong data-i18n="loadout.recon.name">LONG-RANGE HUNTER</strong><small data-i18n="loadout.recon.summary">BARRETT · WHITE PISTOL · SWISS KNIFE · SMOKE GRENADE</small></span></button>
+                <button type="button" class="loadout-option" data-loadout="raider"><b>02</b><span><strong data-i18n="loadout.raider.name">BREACH RAIDER</strong><small data-i18n="loadout.raider.summary">AK-47 · BAIKE PISTOL · BATTLE AXE · FIREWORK GRENADE</small></span></button>
+                <button type="button" class="loadout-option" data-loadout="police"><b>03</b><span><strong data-i18n="loadout.police.name">POLICE FIREPOWER</strong><small data-i18n="loadout.police.summary">LOW-RECOIL MG · DUAL PISTOLS · SWISS KNIFE · SKULL GRENADE</small></span></button>
               </div>
             </section>
 
-            <button type="button" id="start-button" class="primary-button" disabled><span>请先选择版本</span><kbd>ENTER</kbd></button>
+            <button type="button" id="start-button" class="primary-button" disabled><span data-i18n="start.selectVersion">SELECT A GAME TYPE</span><kbd>ENTER</kbd></button>
           </div>
 
           <section id="network-lobby" class="network-lobby is-hidden" aria-live="polite">
-            <div class="lobby-identity"><span><i id="network-dot"></i><b id="network-alias">未连接</b></span><small id="network-status">等待注册</small></div>
+            <div class="lobby-identity"><span><i id="network-dot"></i><b id="network-alias" data-i18n="lobby.disconnected">NOT CONNECTED</b></span><small id="network-status" data-i18n="lobby.waitingRegistration">WAITING FOR REGISTRATION</small></div>
             <div id="network-no-room" class="network-no-room">
-              <p>创建房间后可邀请所有尚未加入其他房间的在线玩家。</p>
-              <button type="button" id="create-room-button" class="secondary-button">创建作战房间</button>
+              <p data-i18n="lobby.noRoom.description">Create a room, then invite any registered player who is not already in another room.</p>
+              <button type="button" id="create-room-button" class="secondary-button" data-i18n="lobby.createRoom">CREATE BATTLE ROOM</button>
             </div>
             <div id="room-console" class="room-console is-hidden">
-              <header><span>房间 <b id="room-code">------</b></span><small id="room-capacity">1 / 8 真人</small></header>
+              <header><span><span data-i18n="lobby.room">ROOM</span> <b id="room-code">------</b></span><small id="room-capacity" data-i18n="lobby.capacity.initial">1 / 8 PLAYERS</small></header>
               <div id="room-members" class="room-members"></div>
-              <p class="lobby-label">可邀请玩家</p>
+              <p class="lobby-label" data-i18n="lobby.invitable">AVAILABLE PLAYERS</p>
               <div id="online-users" class="online-users"></div>
               <div class="room-actions">
-                <button type="button" id="leave-room-button" class="ghost-button">离开房间</button>
-                <button type="button" id="start-room-button" class="secondary-button">开始比赛 · AI 补位</button>
+                <button type="button" id="leave-room-button" class="ghost-button" data-i18n="lobby.leave">LEAVE ROOM</button>
+                <button type="button" id="start-room-button" class="secondary-button" data-i18n="lobby.start">START · FILL WITH AI</button>
               </div>
             </div>
             <div id="invite-card" class="invite-card is-hidden">
-              <p id="invite-copy">收到房间邀请</p>
-              <div><button type="button" id="decline-invite">拒绝</button><button type="button" id="accept-invite">接受</button></div>
+              <p id="invite-copy">ROOM INVITATION RECEIVED</p>
+              <div><button type="button" id="decline-invite" data-i18n="lobby.decline">DECLINE</button><button type="button" id="accept-invite" data-i18n="lobby.accept">ACCEPT</button></div>
             </div>
           </section>
         </aside>
 
         <div class="controls-strip">
-          <span><kbd>WASD</kbd> 移动</span><span><kbd>鼠标</kbd> 瞄准</span><span><kbd>左键</kbd> 攻击</span>
-          <span><kbd>右键</kbd> 开镜</span><span><kbd>1/2/3</kbd> 主副近战</span><span><kbd>G</kbd> 投掷</span>
-          <span><kbd>B</kbd> 换背包</span><span><kbd>F</kbd> 驾驶坦克</span>
+          <span><kbd>WASD</kbd> <span data-i18n="controls.move">MOVE</span></span><span><kbd>MOUSE</kbd> <span data-i18n="controls.aim">AIM</span></span><span><kbd>LMB</kbd> <span data-i18n="controls.attack">ATTACK</span></span>
+          <span><kbd>RMB</kbd> <span data-i18n="controls.scope">SCOPE</span></span><span><kbd>1/2/3</kbd> <span data-i18n="controls.weapons">WEAPONS</span></span><span><kbd>G</kbd> <span data-i18n="controls.throw">THROW</span></span>
+          <span><kbd>B</kbd> <span data-i18n="controls.loadout">LOADOUT</span></span><span><kbd>F</kbd> <span data-i18n="controls.tank">DRIVE TANK</span></span>
         </div>
       </section>
 
       <section id="hud" class="hud is-hidden" aria-live="polite">
         <div class="top-bar">
-          <div class="team-score seals"><span>蓝队</span><strong id="seal-score">00</strong></div>
-          <div class="mission-clock"><b id="clock">08:00</b><span id="match-limit">先到 15 分 · 4V4</span></div>
-          <div class="team-score tangos"><strong id="terror-score">00</strong><span>红队</span></div>
+          <div class="team-score seals"><span data-i18n="team.seal">BLUE TEAM</span><strong id="seal-score">00</strong></div>
+          <div class="mission-clock"><b id="clock">08:00</b><span id="match-limit">FIRST TO 15 · 4V4</span></div>
+          <div class="team-score tangos"><strong id="terror-score">00</strong><span data-i18n="team.terror">RED TEAM</span></div>
         </div>
 
         <div class="status-panel">
-          <p id="location">泡泡港城 · 南港高架</p>
-          <div class="health-line"><span>生命</span><b id="health">100</b></div>
+          <p id="location">BUBBLE HARBOR · SOUTH OVERPASS</p>
+          <div class="health-line"><span data-i18n="hud.health">HEALTH</span><b id="health">100</b></div>
           <div class="health-track"><i id="health-fill"></i></div>
         </div>
 
         <div id="kill-feed" class="kill-feed"></div>
-        <div id="interaction" class="interaction is-hidden"><kbd>F</kbd><span>驾驶 M-77 泡泡坦克</span></div>
+        <div id="interaction" class="interaction is-hidden"><kbd>F</kbd><span data-i18n="hud.interactTank">DRIVE M-77 BUBBLE TANK</span></div>
         <div id="announcement" class="announcement is-hidden"></div>
         <div id="crosshair" class="crosshair"><i></i><i></i><i></i><i></i><b></b></div>
         <div id="hit-marker" class="hit-marker">×</div>
@@ -120,50 +121,50 @@
         <div class="vignette"></div>
 
         <aside class="radar-wrap">
-          <div class="radar-head"><span id="radar-map">泡泡港城</span><b id="alive-count">4 : 4</b></div>
+          <div class="radar-head"><span id="radar-map">BUBBLE HARBOR</span><b id="alive-count">4 : 4</b></div>
           <canvas id="radar" width="240" height="168"></canvas>
         </aside>
 
         <aside class="weapon-panel">
-          <p><span id="weapon-slot">主武器 / 1</span><em id="backpack-name">背包 01 · 远程猎手</em></p>
+          <p><span id="weapon-slot">PRIMARY / 1</span><em id="backpack-name">LOADOUT 01 · LONG-RANGE HUNTER</em></p>
           <div><strong id="weapon-name">BARRETT M82A1</strong><b id="ammo">∞</b></div>
-          <span id="weapon-mode">.50 BMG · 8×瞄准镜</span>
-          <small id="throwable-name">G · M18 烟雾弹</small>
+          <span id="weapon-mode">.50 BMG · 8× SCOPE</span>
+          <small id="throwable-name">G · M18 SMOKE GRENADE</small>
         </aside>
 
         <div id="tank-hud" class="tank-hud is-hidden">
-          <span>装甲 <b id="tank-health">100</b></span><strong id="tank-speed">000</strong><small>KM/H</small>
-          <p>独立炮塔 · 可移动射击 · 主炮无限</p>
+          <span><span data-i18n="hud.armor">ARMOR</span> <b id="tank-health">100</b></span><strong id="tank-speed">000</strong><small>KM/H</small>
+          <p data-i18n="hud.tankDetail">INDEPENDENT TURRET · MOBILE FIRE · UNLIMITED SHELLS</p>
         </div>
 
         <div id="mobile-controls" class="mobile-controls">
           <div id="move-pad" class="move-pad"><i id="move-stick"></i></div>
-          <button type="button" data-action="scope">镜</button><button type="button" data-action="grenade">雷</button>
-          <button type="button" data-action="backpack">包</button><button type="button" data-action="interact">F</button>
-          <button type="button" data-action="fire" class="fire-button">开火</button>
+          <button type="button" data-action="scope" data-i18n="mobile.scope">SCOPE</button><button type="button" data-action="grenade" data-i18n="mobile.grenade">GRENADE</button>
+          <button type="button" data-action="backpack" data-i18n="mobile.loadout">PACK</button><button type="button" data-action="interact">F</button>
+          <button type="button" data-action="fire" class="fire-button" data-i18n="mobile.fire">FIRE</button>
         </div>
       </section>
 
       <section id="modal" class="modal is-hidden">
-        <p id="modal-kicker">行动暂停</p><h2 id="modal-title">重新部署</h2><p id="modal-copy">点击继续并重新锁定鼠标</p>
-        <button type="button" id="resume-button" class="primary-button"><span>继续行动</span><kbd>ENTER</kbd></button>
+        <p id="modal-kicker" data-i18n="modal.paused.kicker">MISSION PAUSED</p><h2 id="modal-title" data-i18n="modal.paused.title">REDEPLOY</h2><p id="modal-copy" data-i18n="modal.paused.copy">Tap continue to lock the pointer again.</p>
+        <button type="button" id="resume-button" class="primary-button"><span data-i18n="modal.continue">CONTINUE</span><kbd>ENTER</kbd></button>
       </section>
 
       <section id="alias-modal" class="modal alias-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="alias-title">
-        <p>网络身份注册</p><h2 id="alias-title">输入作战别名</h2>
-        <p>确认后将自动连接同域 WebSocket 服务，别名在本次在线期间唯一。</p>
-        <input id="alias-input" type="text" maxlength="16" autocomplete="nickname" placeholder="2–16 个字符" />
+        <p data-i18n="alias.kicker">ONLINE ID REGISTRATION</p><h2 id="alias-title" data-i18n="alias.title">ENTER A CALLSIGN</h2>
+        <p data-i18n="alias.description">Confirm to connect automatically to the same-origin WebSocket service. Callsigns are unique while online.</p>
+        <input id="alias-input" type="text" maxlength="16" autocomplete="nickname" placeholder="2–16 characters" data-i18n-placeholder="alias.placeholder" />
         <small id="alias-error" class="form-error"></small>
-        <div class="modal-actions"><button type="button" id="alias-cancel" class="ghost-button">返回</button><button type="button" id="alias-confirm" class="primary-button"><span>确认并连接</span></button></div>
+        <div class="modal-actions"><button type="button" id="alias-cancel" class="ghost-button" data-i18n="alias.back">BACK</button><button type="button" id="alias-confirm" class="primary-button"><span data-i18n="alias.confirm">CONFIRM AND CONNECT</span></button></div>
       </section>
 
       <section id="ranking-modal" class="ranking-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="ranking-title">
-        <header><p>战局结算</p><h2 id="ranking-title">比赛排名</h2><strong id="ranking-result">蓝队胜利</strong></header>
-        <div class="ranking-score"><span>蓝队 <b id="ranking-seal-score">00</b></span><i>FINAL</i><span><b id="ranking-terror-score">00</b> 红队</span></div>
-        <div class="ranking-table-wrap"><table><thead><tr><th>#</th><th>玩家</th><th>阵营</th><th>击杀</th><th>阵亡</th><th>K/D</th><th>伤害</th><th>积分</th></tr></thead><tbody id="ranking-body"></tbody></table></div>
-        <button type="button" id="ranking-close" class="primary-button"><span>返回房间</span></button>
+        <header><p data-i18n="ranking.kicker">MATCH COMPLETE</p><h2 id="ranking-title" data-i18n="ranking.title">MATCH RANKING</h2><strong id="ranking-result" data-i18n="ranking.blueWins">BLUE TEAM WINS</strong></header>
+        <div class="ranking-score"><span><span data-i18n="team.seal">BLUE TEAM</span> <b id="ranking-seal-score">00</b></span><i>FINAL</i><span><b id="ranking-terror-score">00</b> <span data-i18n="team.terror">RED TEAM</span></span></div>
+        <div class="ranking-table-wrap"><table><thead><tr><th>#</th><th data-i18n="ranking.player">PLAYER</th><th data-i18n="ranking.team">TEAM</th><th data-i18n="ranking.kills">KILLS</th><th data-i18n="ranking.deaths">DEATHS</th><th>K/D</th><th data-i18n="ranking.damage">DAMAGE</th><th data-i18n="ranking.points">POINTS</th></tr></thead><tbody id="ranking-body"></tbody></table></div>
+        <button type="button" id="ranking-close" class="primary-button"><span data-i18n="ranking.return">RETURN TO ROOM</span></button>
       </section>
     </main>
-    <script type="module" src="src/main.js?v=20261003-v2"></script>
+    <script type="module" src="src/main.js?v=20261004-i18n"></script>
   </body>
 </html>

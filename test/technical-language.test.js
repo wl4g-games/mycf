@@ -1,0 +1,42 @@
+import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import { extname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
+import test from "node:test";
+
+const root = fileURLToPath(new URL("..", import.meta.url));
+const simplifiedChineseCatalog = "src/locales/zh-CN.js";
+const ignoredDirectories = new Set([".git", "assets", "dist", "node_modules"]);
+const textExtensions = new Set([".conf", ".css", ".html", ".js", ".json", ".md", ".mjs", ".service", ".yaml", ".yml"]);
+const extensionlessFiles = new Set([".dockerignore", ".gitignore", "Dockerfile"]);
+const chineseCharacters = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/u;
+const localizedMessageLine = /^\s*(?:nativeName|"[A-Za-z0-9_.-]+"):\s*"(?:[^"\\]|\\.)*",?\s*$/u;
+
+function sourceFiles(directory) {
+  const files = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (entry.isDirectory() && ignoredDirectories.has(entry.name)) continue;
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) files.push(...sourceFiles(path));
+    else if (textExtensions.has(extname(entry.name)) || extensionlessFiles.has(entry.name)) files.push(path);
+  }
+  return files;
+}
+
+test("Chinese characters are isolated to the Simplified Chinese UI catalog", () => {
+  const violations = [];
+  let localizedLineCount = 0;
+  for (const file of sourceFiles(root)) {
+    const projectPath = relative(root, file).replaceAll("\\", "/");
+    readFileSync(file, "utf8").split("\n").forEach((line, index) => {
+      if (!chineseCharacters.test(line)) return;
+      if (projectPath === simplifiedChineseCatalog && localizedMessageLine.test(line)) {
+        localizedLineCount += 1;
+        return;
+      }
+      violations.push(`${projectPath}:${index + 1}`);
+    });
+  }
+  assert.deepEqual(violations, []);
+  assert.ok(localizedLineCount > 0, "The Simplified Chinese UI catalog must contain localized messages.");
+});

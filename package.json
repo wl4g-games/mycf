@@ -3,14 +3,14 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "原创卡通 3D H5 射击游戏与同域 WebSocket 多人服务",
+  "description": "Original cartoon-style 3D H5 shooter with a same-origin WebSocket multiplayer server",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
     "start": "node server/index.js",
     "test": "node --test test/*.test.js",
-    "check": "node --check .github/scripts/upsert-pr-ci-comment.mjs && node --check server/index.js && node --check server/static.js && node --check server/lobby.js && node --check server/match.js && node --check src/main.js && node --check src/network.js && node --check src/network-game.js && node --check src/game.js && node --check src/renderer.js"
+    "check": "node --check .github/scripts/upsert-pr-ci-comment.mjs && node --check server/index.js && node --check server/static.js && node --check server/lobby.js && node --check server/match.js && node --check src/i18n.js && node --check src/locales/en.js && node --check src/locales/zh-CN.js && node --check src/main.js && node --check src/network.js && node --check src/network-game.js && node --check src/game.js && node --check src/renderer.js"
   },
   "engines": {
     "node": ">=20"

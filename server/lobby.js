@@ -44,13 +44,13 @@ export class LobbyService {
       client.messages = 0;
     }
     client.messages += 1;
-    if (client.messages > 80) return this.error(client, "RATE_LIMIT", "操作过于频繁，请稍后再试");
+    if (client.messages > 80) return this.error(client, "RATE_LIMIT", "Too many requests. Try again shortly.");
     if (raw.length > 16384) return client.socket.close(1009, "message too large");
     let message;
-    try { message = JSON.parse(raw.toString()); } catch (error) { return this.error(client, "BAD_JSON", "消息格式无效"); }
-    if (!message || typeof message.type !== "string") return this.error(client, "BAD_MESSAGE", "缺少消息类型");
+    try { message = JSON.parse(raw.toString()); } catch (error) { return this.error(client, "BAD_JSON", "The message payload is not valid JSON."); }
+    if (!message || typeof message.type !== "string") return this.error(client, "BAD_MESSAGE", "The message type is missing.");
     const payload = message.payload || {};
-    if (message.type !== "register" && !client.alias) return this.error(client, "NOT_REGISTERED", "请先注册别名");
+    if (message.type !== "register" && !client.alias) return this.error(client, "NOT_REGISTERED", "Register a callsign first.");
     const handlers = {
       register: () => this.register(client, payload),
       update_profile: () => this.updateProfile(client, payload),
@@ -63,16 +63,16 @@ export class LobbyService {
       ping: () => this.send(client, "pong", { now: Date.now() }),
     };
     const handler = handlers[message.type];
-    if (!handler) return this.error(client, "UNKNOWN_TYPE", "不支持的消息类型");
+    if (!handler) return this.error(client, "UNKNOWN_TYPE", "This message type is not supported.");
     handler();
   }
 
   register(client, payload) {
-    if (client.alias) return this.error(client, "ALREADY_REGISTERED", "该连接已注册");
+    if (client.alias) return this.error(client, "ALREADY_REGISTERED", "This connection is already registered.");
     const alias = String(payload.alias || "").trim().replace(/\s+/g, " ");
-    if (!ALIAS_PATTERN.test(alias)) return this.error(client, "BAD_ALIAS", "别名需为 2–16 个中英文、数字、空格、下划线或连字符");
+    if (!ALIAS_PATTERN.test(alias)) return this.error(client, "BAD_ALIAS", "Use 2–16 letters, numbers, spaces, underscores, or hyphens.");
     const exists = [...this.clients.values()].some(item => item !== client && item.alias && item.alias.toLocaleLowerCase() === alias.toLocaleLowerCase());
-    if (exists) return this.error(client, "ALIAS_TAKEN", "这个别名已在线，请换一个");
+    if (exists) return this.error(client, "ALIAS_TAKEN", "That callsign is already online. Choose another one.");
     client.alias = alias;
     client.loadoutId = LOADOUTS[payload.loadoutId] ? payload.loadoutId : "recon";
     this.send(client, "registered", { self: this.publicUser(client) });
@@ -86,7 +86,7 @@ export class LobbyService {
   }
 
   createRoom(client, payload) {
-    if (client.roomId) return this.error(client, "IN_ROOM", "请先离开当前房间");
+    if (client.roomId) return this.error(client, "IN_ROOM", "Leave the current room first.");
     const mapId = MAPS[payload.mapId] ? payload.mapId : "city";
     const modeId = GAME_MODES[payload.modeId] ? payload.modeId : "4v4";
     let id = roomCode();
@@ -110,21 +110,21 @@ export class LobbyService {
 
   invite(client, payload) {
     const room = this.rooms.get(client.roomId);
-    if (!room || room.ownerId !== client.id || room.status !== "waiting") return this.error(client, "NOT_OWNER", "只有等待中的房主可以邀请");
+    if (!room || room.ownerId !== client.id || room.status !== "waiting") return this.error(client, "NOT_OWNER", "Only the owner of a waiting room can invite players.");
     const target = this.clients.get(String(payload.targetId || ""));
-    if (!target?.alias || target.roomId) return this.error(client, "TARGET_BUSY", "该玩家已离线或正在其他房间");
-    if (room.members.length >= this.maxHumans(room)) return this.error(client, "ROOM_FULL", "房间真人席位已满");
+    if (!target?.alias || target.roomId) return this.error(client, "TARGET_BUSY", "That player is offline or already in another room.");
+    if (room.members.length >= this.maxHumans(room)) return this.error(client, "ROOM_FULL", "All human slots in this room are occupied.");
     room.invited.add(target.id);
     this.send(target, "invite", { room: this.publicRoom(room), from: this.publicUser(client) });
-    this.send(client, "notice", { message: `已邀请 ${target.alias}` });
+    this.send(client, "notice", { code: "INVITE_SENT", params: { alias: target.alias } });
   }
 
   respondInvite(client, payload) {
     const room = this.rooms.get(String(payload.roomId || ""));
-    if (!room || !room.invited.has(client.id)) return this.error(client, "INVITE_EXPIRED", "邀请已失效");
+    if (!room || !room.invited.has(client.id)) return this.error(client, "INVITE_EXPIRED", "This invitation has expired.");
     room.invited.delete(client.id);
-    if (!payload.accept) return this.send(client, "notice", { message: "已拒绝房间邀请" });
-    if (client.roomId || room.status !== "waiting" || room.members.length >= this.maxHumans(room)) return this.error(client, "ROOM_UNAVAILABLE", "房间已开始或已满");
+    if (!payload.accept) return this.send(client, "notice", { code: "INVITE_DECLINED" });
+    if (client.roomId || room.status !== "waiting" || room.members.length >= this.maxHumans(room)) return this.error(client, "ROOM_UNAVAILABLE", "This room has started or is full.");
     client.roomId = room.id;
     room.members.push(client.id);
     this.broadcastRoom(room);
@@ -148,9 +148,9 @@ export class LobbyService {
 
   startRoom(client) {
     const room = this.rooms.get(client.roomId);
-    if (!room || room.ownerId !== client.id || room.status !== "waiting") return this.error(client, "NOT_OWNER", "只有房主可以开始");
+    if (!room || room.ownerId !== client.id || room.status !== "waiting") return this.error(client, "NOT_OWNER", "Only the owner of a waiting room can start the match.");
     const members = room.members.map(id => this.clients.get(id)).filter(Boolean);
-    if (!members.length) return this.error(client, "EMPTY_ROOM", "房间没有在线玩家");
+    if (!members.length) return this.error(client, "EMPTY_ROOM", "No online players remain in this room.");
     room.status = "playing";
     room.match = new AuthoritativeMatch(
       room,

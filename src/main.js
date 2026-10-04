@@ -1,10 +1,11 @@
-import { MAPS, TEAM } from "./config.js?v=20261003-v2";
-import { GameAudio } from "./audio.js?v=20261003-v2";
-import { GameState } from "./game.js?v=20261003-v2";
-import { InputController } from "./input.js?v=20261003-v2";
-import { NetworkClient } from "./network.js?v=20261003-v2";
-import { NetworkGameState } from "./network-game.js?v=20261003-v2";
-import { Renderer } from "./renderer.js?v=20261003-v2";
+import { LOADOUTS, MAPS, TEAM, THROWABLES, WEAPONS } from "./config.js?v=20261004-i18n";
+import { GameAudio } from "./audio.js?v=20261004-i18n";
+import { GameState } from "./game.js?v=20261004-i18n";
+import { applyDocumentTranslations, onLocaleChange, t, toggleLocale } from "./i18n.js?v=20261004-i18n";
+import { InputController } from "./input.js?v=20261004-i18n";
+import { NetworkClient } from "./network.js?v=20261004-i18n";
+import { NetworkGameState } from "./network-game.js?v=20261004-i18n";
+import { Renderer } from "./renderer.js?v=20261004-i18n";
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => Array.from(document.querySelectorAll(selector));
@@ -32,16 +33,22 @@ let lastTime = performance.now();
 let pendingInvite = null;
 
 function handleGameEvent(type, payload) {
-  if (type === "announce") announce(payload);
+  if (type === "announce") announce(localizeAnnouncement(payload));
   if (type === "death") {
     modalMode = "death";
-    showModal("重新部署", "医疗队正在接近，3 秒后返回战场", "你已阵亡", false);
+    showModal(t("modal.death.title"), t("modal.death.copy"), t("modal.death.kicker"), false);
   }
-  if (type === "respawn") { hideModal(); announce("重新部署完成"); }
+  if (type === "respawn") { hideModal(); announce(t("announce.respawned")); }
   if (type === "finish") {
     const won = payload.winner === TEAM.SEAL;
     modalMode = "finish";
-    showModal(won ? "区域已控制" : "行动失败", `最终比分 ${pad(payload.score.seal, 2)} : ${pad(payload.score.terror, 2)}`, won ? "蓝队胜利" : "红队胜利", true, "再战一局");
+    showModal(
+      t(won ? "modal.finish.win.title" : "modal.finish.loss.title"),
+      t("modal.finish.score", { seal: pad(payload.score.seal, 2), terror: pad(payload.score.terror, 2) }),
+      t(won ? "ranking.blueWins" : "ranking.redWins"),
+      true,
+      t("modal.playAgain"),
+    );
     exitPointerLock();
   }
 }
@@ -50,6 +57,43 @@ const singleGame = new GameState(audio, handleGameEvent);
 game = singleGame;
 
 function pad(value, length) { return String(value).padStart(length, "0"); }
+
+function mapName(map) { return t(map.nameKey); }
+function loadoutName(loadout) { return t(loadout.nameKey); }
+
+function weaponName(weaponId) {
+  if (weaponId === "tankCannon") return t("weapon.tankCannon.name");
+  if (WEAPONS[weaponId]) return t(WEAPONS[weaponId].nameKey);
+  if (THROWABLES[weaponId]) return t(THROWABLES[weaponId].nameKey);
+  return weaponId;
+}
+
+function localizeAnnouncement(payload) {
+  if (typeof payload === "string") return payload;
+  if (!payload?.key) return "";
+  if (payload.key === "announce.loadoutChanged") {
+    const loadout = LOADOUTS[payload.loadoutId] || LOADOUTS.recon;
+    return t(payload.key, { number: loadout.number, name: loadoutName(loadout) });
+  }
+  return t(payload.key, payload.params);
+}
+
+function localizedError(code, fallback = "") {
+  const key = `error.${code || "REGISTRATION_FAILED"}`;
+  const message = t(key);
+  return message === key ? fallback || t("error.REGISTRATION_FAILED") : message;
+}
+
+function updateStartButtonLabel() {
+  const key = !selected.versionId
+    ? "start.selectVersion"
+    : selected.versionId === "solo"
+      ? "start.solo"
+      : network.room
+        ? "start.roomCreated"
+        : network.self ? "start.createRoom" : "start.register";
+  startButton.querySelector("span").textContent = t(key);
+}
 
 function lockPointer() {
   if (touchDevice || typeof canvas.requestPointerLock !== "function") return;
@@ -87,7 +131,7 @@ function setVersion(versionId, button) {
   $("#deployment-options").classList.remove("is-locked");
   $("#deployment-options").setAttribute("aria-disabled", "false");
   startButton.disabled = false;
-  startButton.querySelector("span").textContent = versionId === "solo" ? "开始单机行动" : network.self ? "创建作战房间" : "注册网络身份";
+  updateStartButtonLabel();
   if (versionId === "solo") {
     $("#network-lobby").classList.add("is-hidden");
     aliasModal.classList.add("is-hidden");
@@ -129,19 +173,19 @@ async function registerNetworkIdentity() {
   const alias = $("#alias-input").value.trim();
   const error = $("#alias-error");
   const confirm = $("#alias-confirm");
-  if (alias.length < 2) { error.textContent = "请输入至少 2 个字符"; return; }
+  if (alias.length < 2) { error.textContent = t("alias.tooShort"); return; }
   confirm.disabled = true;
-  error.textContent = "正在连接多人服务…";
+  error.textContent = t("alias.connecting");
   try {
     const self = await network.connectAndRegister(alias, selected.loadoutId);
     aliasModal.classList.add("is-hidden");
     $("#network-lobby").classList.remove("is-hidden");
     $("#network-alias").textContent = self.alias;
-    $("#network-status").textContent = "已注册 · 在线";
-    startButton.querySelector("span").textContent = "创建作战房间";
+    $("#network-status").textContent = t("lobby.online");
+    updateStartButtonLabel();
     renderLobby();
   } catch (connectionError) {
-    error.textContent = connectionError.message;
+    error.textContent = localizedError(connectionError.code, connectionError.message);
   } finally {
     confirm.disabled = false;
   }
@@ -152,7 +196,7 @@ function beginSolo() {
   game.configure(selected);
   game.start();
   enterBattle();
-  announce(`${game.map.name} · 单机版 · ${game.mode.label} · 其余席位均为 AI NPC`);
+  announce(t("announce.soloStart", { map: mapName(game.map), mode: game.mode.label }));
 }
 
 function createNetworkRoom() {
@@ -161,7 +205,7 @@ function createNetworkRoom() {
   network.updateProfile(selected.loadoutId);
   network.createRoom({ mapId: selected.mapId, modeId: selected.modeId });
   startButton.disabled = true;
-  startButton.querySelector("span").textContent = "正在创建房间…";
+  startButton.querySelector("span").textContent = t("start.creatingRoom");
 }
 
 function begin() {
@@ -193,15 +237,15 @@ function returnToLobby() {
 function renderLobby() {
   if (!network.self) return;
   $("#network-alias").textContent = network.self.alias;
-  $("#network-status").textContent = network.connected ? "已注册 · 在线" : "连接已断开";
+  $("#network-status").textContent = t(network.connected ? "lobby.online" : "lobby.connectionLost");
   const room = network.room;
   $("#network-no-room").classList.toggle("is-hidden", Boolean(room));
   $("#room-console").classList.toggle("is-hidden", !room);
   startButton.disabled = Boolean(room);
-  startButton.querySelector("span").textContent = room ? "房间已创建" : "创建作战房间";
+  updateStartButtonLabel();
   if (!room) return;
   $("#room-code").textContent = room.id;
-  $("#room-capacity").textContent = `${room.members.length} / ${room.maxHumans} 真人 · 其余 AI`;
+  $("#room-capacity").textContent = t("lobby.capacity", { members: room.members.length, maximum: room.maxHumans });
   const memberRoot = $("#room-members");
   memberRoot.replaceChildren();
   room.members.forEach(member => {
@@ -210,7 +254,7 @@ function renderLobby() {
     const name = document.createElement("span");
     name.textContent = member.alias;
     const detail = document.createElement("small");
-    detail.textContent = member.id === room.ownerId ? "房主" : "队员";
+    detail.textContent = t(member.id === room.ownerId ? "lobby.owner" : "lobby.member");
     row.append(name, detail);
     memberRoot.append(row);
   });
@@ -220,7 +264,7 @@ function renderLobby() {
   if (!available.length) {
     const empty = document.createElement("p");
     empty.className = "online-empty";
-    empty.textContent = "暂无可邀请玩家";
+    empty.textContent = t("lobby.noAvailablePlayers");
     onlineRoot.append(empty);
   }
   available.forEach(user => {
@@ -230,21 +274,28 @@ function renderLobby() {
     name.textContent = user.alias;
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = "邀请";
+    button.textContent = t("lobby.invite");
     bindTap(button, () => network.invite(user.id));
     row.append(name, button);
     onlineRoot.append(row);
   });
   const isOwner = room.ownerId === network.self.id;
   $("#start-room-button").disabled = !isOwner || room.status !== "waiting";
-  $("#start-room-button").textContent = isOwner ? "开始比赛 · AI 补位" : "等待房主开始";
+  $("#start-room-button").textContent = t(isOwner ? "lobby.start" : "lobby.waitOwner");
+}
+
+function renderPendingInvite() {
+  const copy = pendingInvite
+    ? t("invite.message", { alias: pendingInvite.from.alias, room: pendingInvite.room.id })
+    : t("lobby.invitePrompt");
+  $("#invite-copy").textContent = copy;
 }
 
 function showRanking(result) {
   exitPointerLock();
   paused = true;
   const sealWon = result.winner === TEAM.SEAL;
-  $("#ranking-result").textContent = sealWon ? "蓝队胜利" : "红队胜利";
+  $("#ranking-result").textContent = t(sealWon ? "ranking.blueWins" : "ranking.redWins");
   $("#ranking-seal-score").textContent = pad(result.score.seal, 2);
   $("#ranking-terror-score").textContent = pad(result.score.terror, 2);
   const body = $("#ranking-body");
@@ -253,7 +304,7 @@ function showRanking(result) {
     const row = document.createElement("tr");
     if (entry.userId === network.self?.id) row.classList.add("self");
     if (entry.isBot) row.classList.add("bot");
-    const values = [entry.rank, `${entry.name}${entry.isBot ? " [AI]" : ""}`, entry.team === TEAM.SEAL ? "蓝队" : "红队", entry.kills, entry.deaths, entry.kd.toFixed(2), entry.damage, entry.points];
+    const values = [entry.rank, `${entry.name}${entry.isBot ? " [AI]" : ""}`, t(entry.team === TEAM.SEAL ? "team.seal" : "team.terror"), entry.kills, entry.deaths, entry.kd.toFixed(2), entry.damage, entry.points];
     values.forEach(value => {
       const cell = document.createElement("td");
       cell.textContent = value;
@@ -268,15 +319,23 @@ network.on("registered", renderLobby);
 network.on("presence", renderLobby);
 network.on("room_state", renderLobby);
 network.on("room_left", renderLobby);
-network.on("notice", payload => { $("#network-status").textContent = payload.message; });
-network.on("status", payload => { $("#network-status").textContent = payload.message; });
+network.on("notice", payload => {
+  if (!payload.code) {
+    $("#network-status").textContent = payload.message || "";
+    return;
+  }
+  const key = `notice.${payload.code}`;
+  $("#network-status").textContent = t(key, payload.params || {});
+});
+network.on("status", payload => { $("#network-status").textContent = t(`status.${payload.code}`); });
 network.on("error", payload => {
-  if (!aliasModal.classList.contains("is-hidden")) $("#alias-error").textContent = payload.message;
-  else $("#network-status").textContent = payload.message;
+  const message = localizedError(payload.code, payload.message);
+  if (!aliasModal.classList.contains("is-hidden")) $("#alias-error").textContent = message;
+  else $("#network-status").textContent = message;
 });
 network.on("invite", payload => {
   pendingInvite = payload;
-  $("#invite-copy").textContent = `${payload.from.alias} 邀请你加入房间 ${payload.room.id}`;
+  renderPendingInvite();
   $("#invite-card").classList.remove("is-hidden");
 });
 network.on("match_start", payload => {
@@ -284,13 +343,13 @@ network.on("match_start", payload => {
   networkGame.start(payload);
   game = networkGame;
   enterBattle();
-  announce(`${game.map.name} · 网络版 · ${game.mode.label} · 空缺席位已由 AI 补齐`);
+  announce(t("announce.networkStart", { map: mapName(game.map), mode: game.mode.label }));
 });
 network.on("snapshot", payload => { if (networkGame) networkGame.applySnapshot(payload); });
 network.on("combat_event", payload => { if (networkGame) networkGame.handleCombatEvent(payload); });
 network.on("match_end", showRanking);
 
-function showModal(title, copy, kicker = "行动暂停", showButton = true, buttonText = "继续行动") {
+function showModal(title, copy, kicker = t("modal.paused.kicker"), showButton = true, buttonText = t("modal.continue")) {
   $("#modal-title").textContent = title;
   $("#modal-copy").textContent = copy;
   $("#modal-kicker").textContent = kicker;
@@ -308,7 +367,7 @@ function resume() {
     modalMode = "pause";
     paused = false;
     hideModal();
-    announce(`${game.map.name} · 新一轮行动开始`);
+    announce(t("announce.newRound", { map: mapName(game.map) }));
   } else {
     paused = false;
     hideModal();
@@ -330,7 +389,7 @@ function getLocation() {
   const north = game.player.y < height * .5;
   const west = game.player.x < width * .5;
   const index = north ? (west ? 2 : 3) : (west ? 0 : 1);
-  return `${game.map.name} · ${game.map.locations[index]}`;
+  return `${mapName(game.map)} · ${t(game.map.locationKeys[index])}`;
 }
 
 function updateHud(dt) {
@@ -340,14 +399,14 @@ function updateHud(dt) {
   const minutes = Math.floor(game.time / 60);
   const seconds = Math.floor(game.time % 60);
   $("#clock").textContent = `${pad(minutes, 2)}:${pad(seconds, 2)}`;
-  $("#match-limit").textContent = `先到 ${game.mode.scoreLimit} 分 · ${game.mode.label}`;
+  $("#match-limit").textContent = t("hud.scoreLimit", { score: game.mode.scoreLimit, mode: game.mode.label });
   $("#health").textContent = Math.ceil(game.player.health);
   $("#health-fill").style.width = `${Math.max(0, game.player.health)}%`;
   $("#health-fill").style.background = game.player.health < 35 ? "#ff654e" : "#5ce5ff";
   const counts = game.aliveCounts;
   $("#alive-count").textContent = `${counts.seal} : ${counts.terror}`;
   $("#location").textContent = getLocation();
-  $("#radar-map").textContent = game.map.name;
+  $("#radar-map").textContent = mapName(game.map);
   $("#interaction").classList.toggle("is-hidden", !game.nearTank);
   $("#hit-marker").classList.toggle("show", game.hitMarker > 0);
   hud.classList.toggle("scoped", game.player.scoped && game.player.alive);
@@ -363,18 +422,18 @@ function updateHud(dt) {
 function updateWeaponPanel() {
   const driving = game.tank.driverId === game.player.id;
   if (driving) {
-    $("#weapon-slot").textContent = "载具武器 / M-77";
-    $("#weapon-name").textContent = "120MM 泡泡主炮";
-    $("#weapon-mode").textContent = "独立炮塔 · 行驶中可开火";
-    $("#throwable-name").textContent = "高爆弹 · 无限备弹";
+    $("#weapon-slot").textContent = t("hud.weapon.vehicle");
+    $("#weapon-name").textContent = t("weapon.tankCannon.name");
+    $("#weapon-mode").textContent = t("hud.weapon.tankMode");
+    $("#throwable-name").textContent = t("hud.weapon.tankAmmo");
   } else {
-    const slots = { primary: "主武器 / 1", secondary: "副武器 / 2", melee: "近战武器 / 3" };
-    $("#weapon-slot").textContent = slots[game.player.weaponSlot] || "主武器 / 1";
-    $("#weapon-name").textContent = game.currentWeapon.name;
-    $("#weapon-mode").textContent = game.currentWeapon.detail;
-    $("#throwable-name").textContent = `G · ${game.currentThrowable.name}`;
+    const slots = { primary: "hud.weapon.primary", secondary: "hud.weapon.secondary", melee: "hud.weapon.melee" };
+    $("#weapon-slot").textContent = t(slots[game.player.weaponSlot] || "hud.weapon.primary");
+    $("#weapon-name").textContent = t(game.currentWeapon.nameKey);
+    $("#weapon-mode").textContent = t(game.currentWeapon.detailKey);
+    $("#throwable-name").textContent = `G · ${t(game.currentThrowable.nameKey)}`;
   }
-  $("#backpack-name").textContent = `背包 ${game.currentLoadout.number} · ${game.currentLoadout.name}`;
+  $("#backpack-name").textContent = t("hud.loadout", { number: game.currentLoadout.number, name: loadoutName(game.currentLoadout) });
   $("#ammo").textContent = "∞";
 }
 
@@ -387,7 +446,7 @@ function updateFeed() {
     killer.className = entry.killerTeam === TEAM.SEAL ? "ally" : "enemy";
     killer.textContent = entry.killer;
     const weapon = document.createElement("b");
-    weapon.textContent = entry.weapon;
+    weapon.textContent = weaponName(entry.weapon);
     const victim = document.createElement("span");
     victim.className = entry.victimTeam === TEAM.SEAL ? "ally" : "enemy";
     victim.textContent = entry.victim;
@@ -405,7 +464,7 @@ function frame(now) {
     if (action[0] === "pause" && game.started && !game.finished) {
       paused = true;
       modalMode = "pause";
-      showModal("行动暂停", selected.versionId === "network" ? "网络战局仍在继续" : "点击继续并重新锁定鼠标", "战术菜单");
+      showModal(t("modal.paused.title"), t(selected.versionId === "network" ? "modal.networkContinues" : "modal.paused.copy"), t("modal.tactical"));
       exitPointerLock();
     } else forwarded.push(action);
   }
@@ -417,6 +476,7 @@ function frame(now) {
 
 bindTap(startButton, begin);
 bindTap(resumeButton, resume);
+bindTap($("#language-toggle"), toggleLocale);
 bindTap($("#alias-confirm"), registerNetworkIdentity);
 bindTap($("#alias-cancel"), () => {
   aliasModal.classList.add("is-hidden");
@@ -424,7 +484,7 @@ bindTap($("#alias-cancel"), () => {
   selectOption("[data-version]", null);
   $("#deployment-options").classList.add("is-locked");
   startButton.disabled = true;
-  startButton.querySelector("span").textContent = "请先选择版本";
+  updateStartButtonLabel();
 });
 bindTap($("#create-room-button"), createNetworkRoom);
 bindTap($("#leave-room-button"), () => network.leaveRoom());
@@ -451,8 +511,15 @@ document.addEventListener("pointerlockchange", () => {
   if (document.pointerLockElement !== canvas && modalMode !== "death") {
     paused = true;
     modalMode = "pause";
-    showModal("行动暂停", selected.versionId === "network" ? "网络战局仍在继续" : "点击继续并重新锁定鼠标", "战术菜单");
+    showModal(t("modal.paused.title"), t(selected.versionId === "network" ? "modal.networkContinues" : "modal.paused.copy"), t("modal.tactical"));
   }
 });
 window.addEventListener("blur", () => { input.fireHeld = false; input.keys.clear(); });
+onLocaleChange(() => {
+  updateStartButtonLabel();
+  renderPendingInvite();
+  if (network.self) renderLobby();
+});
+applyDocumentTranslations();
+updateStartButtonLabel();
 requestAnimationFrame(frame);

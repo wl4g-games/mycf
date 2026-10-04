@@ -4,22 +4,34 @@ const repository = process.env.GITHUB_REPOSITORY;
 const pullRequest = process.env.MYCF_PR_NUMBER;
 const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
 const phase = process.env.MYCF_COMMENT_PHASE;
+const runId = process.env.MYCF_RUN_ID;
 const runUrl = process.env.MYCF_RUN_URL;
 const ciResult = process.env.MYCF_CI_RESULT;
+const dryRun = process.env.MYCF_COMMENT_DRY_RUN === "true";
 
-if (!repository || !pullRequest || !token || !phase || !runUrl) {
+if (!repository || !pullRequest || !phase || !runId || !runUrl || (!token && !dryRun)) {
   throw new Error("Missing MyCF PR CI comment context.");
+}
+if (!/^\d+$/.test(pullRequest) || !/^\d+$/.test(runId)) {
+  throw new Error("MyCF PR number and run ID must be numeric.");
 }
 if (!["started", "final"].includes(phase)) {
   throw new Error(`Unsupported MyCF PR CI comment phase: ${phase}`);
 }
-
-const [owner, repo] = repository.split("/", 2);
-if (!owner || !repo) {
-  throw new Error(`Invalid GITHUB_REPOSITORY: ${repository}`);
+if (phase === "final" && !ciResult) {
+  throw new Error("Missing MyCF CI result for the final comment.");
 }
 
-const marker = "<!-- mycf-ci-status -->";
+const repositoryParts = repository.split("/");
+if (repositoryParts.length !== 2 || repositoryParts.some((part) => !part)) {
+  throw new Error(`Invalid GITHUB_REPOSITORY: ${repository}`);
+}
+const [owner, repo] = repositoryParts;
+
+const markerName = "mycf-ci-status";
+const markerPrefix = `<!-- ${markerName} `;
+const legacyMarker = `<!-- ${markerName} -->`;
+const marker = `${markerPrefix}run-id=${runId} -->`;
 const apiRoot = process.env.GITHUB_API_URL || "https://api.github.com";
 const commentsUrl = `${apiRoot}/repos/${owner}/${repo}/issues/${pullRequest}/comments`;
 
@@ -33,23 +45,23 @@ const resultIcon = (result) => {
 };
 
 const renderComment = () => {
-  const lines = [marker, "## 泡泡战区 PR CI", "", `- 运行：[Actions 日志](${runUrl})`];
+  const lines = [marker, "## Toon Strike PR CI", "", `- Run: [Actions logs](${runUrl})`];
 
   if (phase === "started") {
-    lines.push("- 状态：⏳ 依赖安装、自动测试和生产构建已开始。");
+    lines.push("- Status: ⏳ Dependency installation, automated tests, and the production build have started.");
     return lines.join("\n");
   }
 
   const result = ciResult || "pending";
-  lines.push(`- 构建与测试：${resultIcon(result)} ${result}`);
+  lines.push(`- Build and tests: ${resultIcon(result)} ${result}`);
   lines.push("", result === "success"
-    ? "**CI 已通过。**"
-    : `**CI 未通过。** 请查看 [Actions 日志](${runUrl})。`);
+    ? "**CI passed.**"
+    : `**CI did not pass.** Review the [Actions logs](${runUrl}).`);
   return lines.join("\n");
 };
 
 const body = renderComment();
-if (process.env.MYCF_COMMENT_DRY_RUN === "true") {
+if (dryRun) {
   console.log(body);
   process.exit(0);
 }
@@ -85,16 +97,32 @@ let pageUrl = `${commentsUrl}?per_page=100`;
 while (pageUrl && !existing) {
   const page = await request(pageUrl);
   existing = page.data.find(
-    (comment) => comment.user?.login === "github-actions[bot]" && comment.body?.includes(marker),
+    (comment) => comment.user?.login === "github-actions[bot]"
+      && (comment.body?.includes(markerPrefix) || comment.body?.includes(legacyMarker)),
   );
   pageUrl = nextPage(page.link);
 }
 
 if (existing) {
+  const existingRunId = existing.body.match(
+    new RegExp(`<!-- ${markerName} run-id=(\\d+) -->`),
+  )?.[1];
+  if (existingRunId && BigInt(existingRunId) > BigInt(runId)) {
+    console.log(`Skipping stale run ${runId}; PR comment belongs to newer run ${existingRunId}.`);
+    process.exit(0);
+  }
+  if (phase !== "started" && existingRunId !== runId) {
+    console.log(`Skipping stale run ${runId}; PR comment belongs to run ${existingRunId || "unknown"}.`);
+    process.exit(0);
+  }
   await request(`${apiRoot}/repos/${owner}/${repo}/issues/comments/${existing.id}`, {
     method: "PATCH",
     body: JSON.stringify({ body }),
   });
 } else {
+  if (phase !== "started") {
+    console.log(`Skipping final update for run ${runId}; its start comment was not found.`);
+    process.exit(0);
+  }
   await request(commentsUrl, { method: "POST", body: JSON.stringify({ body }) });
 }

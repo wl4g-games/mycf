@@ -1,4 +1,4 @@
-import { GAME_MODES, LOADOUTS, MAPS, TEAM, THROWABLES, WEAPONS, distance, isSolid, normalizeAngle, spawnCells } from "./config.js?v=20261003-v2";
+import { GAME_MODES, LOADOUTS, MAPS, TEAM, THROWABLES, WEAPONS, distance, isSolid, normalizeAngle, spawnCells } from "./config.js?v=20261004-i18n";
 
 export class NetworkGameState {
   constructor(client, audio, emit = () => {}) {
