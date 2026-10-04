@@ -6,11 +6,11 @@ After=network.target
 Type=simple
 User=agent
 Group=agent
-WorkingDirectory=/home/agent/mycf
+WorkingDirectory=/home/agent/mycf/ws-server
 Environment=NODE_ENV=production
 Environment=MYCF_WS_HOST=127.0.0.1
 Environment=MYCF_WS_PORT=8787
-ExecStart=/usr/bin/node /home/agent/mycf/server/index.js
+ExecStart=/usr/bin/node /home/agent/mycf/ws-server/src/standalone.js
 Restart=on-failure
 RestartSec=2
 NoNewPrivileges=true

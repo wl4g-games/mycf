@@ -4,7 +4,7 @@
 # Job DAG:
 #   build (version + dist + artifacts)
 #      -> release (versioned dist.tar.gz GitHub Release)
-#          |-> build-image (linux/amd64 -> GHCR)
+#          |-> build-image (after ws-server validation, linux/amd64 -> GHCR)
 #          +-> deploy (the same dist -> GitHub Pages)
 
 name: Release and deploy
@@ -180,9 +180,38 @@ jobs:
           files: release/${{ needs.build.outputs.archive }}
           token: ${{ github.token }}
 
+  validate-ws-server:
+    name: Validate WebSocket server
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ws-server/package-lock.json
+
+      - name: Install WebSocket server dependencies
+        working-directory: ws-server
+        run: npm ci
+
+      - name: Test WebSocket server
+        working-directory: ws-server
+        run: npm test
+
+      - name: Check WebSocket server source syntax
+        working-directory: ws-server
+        run: npm run check
+
   build-image:
     name: Build and push linux/amd64 image
-    needs: [build, release]
+    needs: [build, release, validate-ws-server]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -211,7 +240,6 @@ jobs:
           context: .
           push: true
           platforms: linux/amd64
-          build-args: APP_BASE=/
           tags: |
             ghcr.io/${{ github.repository }}:${{ needs.build.outputs.tag }}
             ghcr.io/${{ github.repository }}:latest

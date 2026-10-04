@@ -1,0 +1,18 @@
+{
+  "name": "toon-strike-ws-server",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone authoritative WebSocket game server for Toon Strike",
+  "scripts": {
+    "start": "node src/standalone.js",
+    "test": "node --test test/*.test.js",
+    "check": "node --check api/health.js && node --check api/ws.js && node --check src/access-policy.js && node --check src/game-config.js && node --check src/lobby.js && node --check src/match.js && node --check src/runtime.js && node --check src/standalone.js"
+  },
+  "engines": {
+    "node": "22.x"
+  },
+  "dependencies": {
+    "ws": "8.22.0"
+  }
+}

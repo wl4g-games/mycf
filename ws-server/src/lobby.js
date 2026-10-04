@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { GAME_MODES, LOADOUTS, MAPS } from "../src/config.js";
+import { GAME_MODES, LOADOUTS, MAPS, MATCH_TIME } from "./game-config.js";
 import { AuthoritativeMatch } from "./match.js";
 
 const ALIAS_PATTERN = /^[\p{L}\p{N}_\-\s]{2,16}$/u;
@@ -161,6 +161,7 @@ export class LobbyService {
     members.forEach(member => this.send(member, "match_start", {
       room: this.publicRoom(room),
       assignment: room.match.assignmentFor(member.id),
+      duration: MATCH_TIME,
     }));
     this.broadcastRoom(room);
     this.broadcastPresence();

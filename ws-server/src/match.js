@@ -1,7 +1,7 @@
 import {
   BOT_NAMES, GAME_MODES, LOADOUTS, MAPS, MATCH_TIME, TEAM, THROWABLES, WEAPONS,
   clamp, distance, isSolid, normalizeAngle, spawnCells,
-} from "../src/config.js";
+} from "./game-config.js";
 
 const TEAMS = [TEAM.SEAL, TEAM.TERROR];
 const randomItem = list => list[Math.floor(Math.random() * list.length)];
@@ -43,12 +43,14 @@ function publicActor(actor, ownActor) {
 }
 
 export class AuthoritativeMatch {
-  constructor(room, members, emit, finish) {
+  constructor(room, members, emit, finish, { now = () => performance.now() } = {}) {
     this.roomId = room.id;
     this.map = MAPS[room.mapId] || MAPS.city;
     this.mode = GAME_MODES[room.modeId] || GAME_MODES["4v4"];
     this.emit = emit;
     this.onFinish = finish;
+    this.now = now;
+    this.deadline = this.now() + MATCH_TIME * 1000;
     this.time = MATCH_TIME;
     this.score = { seal: 0, terror: 0 };
     this.actors = [];
@@ -158,7 +160,7 @@ export class AuthoritativeMatch {
   update(dt) {
     if (this.finished) return;
     dt = Math.min(.05, Math.max(.001, dt));
-    this.time = Math.max(0, this.time - dt);
+    this.time = Math.max(0, (this.deadline - this.now()) / 1000);
     this.tank.cooldown = Math.max(0, this.tank.cooldown - dt);
     for (const [userId, actor] of this.actorByUser) {
       if (!actor.alive) continue;

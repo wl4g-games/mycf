@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
-import { LobbyService } from "../server/lobby.js";
+import { LobbyService } from "../src/lobby.js";
 
 class FakeSocket extends EventEmitter {
   constructor() {
@@ -40,6 +40,7 @@ test("registered users can create, invite, accept and start an underfilled room"
   ownerSocket.receive("start_room");
   const matchStart = ownerSocket.take("match_start");
   assert.equal(matchStart.assignment.team, "seal");
+  assert.equal(matchStart.duration, 290);
   const match = lobby.rooms.get(created.id).match;
   assert.equal(match.actors.length, 16);
   assert.equal(match.actors.filter(actor => actor.isBot).length, 14);

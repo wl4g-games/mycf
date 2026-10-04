@@ -1,4 +1,4 @@
-import { createGameServer } from "../server/runtime.js";
+import { createGameServer } from "../src/runtime.js";
 
 const runtime = createGameServer();
 
