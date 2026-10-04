@@ -10,10 +10,10 @@
     "preview": "vite preview --host 127.0.0.1",
     "start": "node server/index.js",
     "test": "node --test test/*.test.js",
-    "check": "node --check .github/scripts/upsert-pr-ci-comment.mjs && node --check server/index.js && node --check server/static.js && node --check server/lobby.js && node --check server/match.js && node --check src/i18n.js && node --check src/locales/en.js && node --check src/locales/zh-CN.js && node --check src/main.js && node --check src/network.js && node --check src/network-game.js && node --check src/game.js && node --check src/renderer.js"
+    "check": "node --check .github/scripts/upsert-pr-ci-comment.mjs && node --check api/health.js && node --check api/ws.js && node --check server/index.js && node --check server/runtime.js && node --check server/static.js && node --check server/lobby.js && node --check server/match.js && node --check src/i18n.js && node --check src/locales/en.js && node --check src/locales/zh-CN.js && node --check src/main.js && node --check src/input.js && node --check src/network.js && node --check src/network-game.js && node --check src/game.js && node --check src/render-animation.js && node --check src/weapon-viewmodel.js && node --check src/renderer.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": "^20.19.0 || >=22.12.0"
   },
   "dependencies": {
     "ws": "8.22.0"

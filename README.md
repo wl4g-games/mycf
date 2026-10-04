@@ -6,13 +6,13 @@
 **卡通小队、双重战场与坦克交火，打开浏览器即可开战。**
 
 <p>
-  <a href="https://mycf.wl4g.com/"><img src="https://img.shields.io/badge/%E2%96%B6%20PLAY%20NOW-%E7%AB%8B%E5%8D%B3%E5%BC%80%E7%8E%A9-2eb9f0?style=for-the-badge" alt="Play Toon Strike · 立即开玩" height="42"></a>
+  <a href="https://wl4g-games.github.io/mycf/"><img src="https://img.shields.io/badge/%E2%96%B6%20PLAY%20NOW-%E7%AB%8B%E5%8D%B3%E5%BC%80%E7%8E%A9-2eb9f0?style=for-the-badge" alt="Play Toon Strike · 立即开玩" height="42"></a>
   <a href="https://github.com/wl4g-games/mycf/actions/workflows/ci.yml"><img src="https://github.com/wl4g-games/mycf/actions/workflows/ci.yml/badge.svg?event=pull_request" alt="Pull request CI status" height="28"></a>
   <a href="https://github.com/wl4g-games/mycf/actions/workflows/release.yml"><img src="https://github.com/wl4g-games/mycf/actions/workflows/release.yml/badge.svg?branch=main&event=push" alt="Release and deployment status" height="28"></a>
 </p>
 
 Play in your browser · 打开即玩 · Solo and online · 单机与联机<br>
-Two maps · 两张地图 · Three loadouts · 三套背包 · Up to 16v16 · 最高 16v16
+Two maps · 两张地图 · Four battle sizes · 四种规模 · Three loadouts · 三套背包 · Up to 16v16 · 最高 16v16
 
 **Unlimited firearm ammunition, grenades, and tank shells.**<br>
 **枪械弹药、手雷与坦克炮弹全部无限。**
@@ -31,8 +31,8 @@ Toon Strike is an original cartoon-style 3D H5 first-person shooter powered by a
   进入部署界面后，先选择单机版或网络版，再选择地图、队伍规模与作战背包。
 - **AI replacement · AI 补位：** Every other slot in solo mode is controlled by an AI NPC; online room owners may start before all human slots are filled, and AI automatically fills every vacancy on both teams.<br>
   单机版除玩家外全部由 AI NPC 控制；网络房主无需等真人满员即可开局，双方空缺席位会自动由 AI 补齐。
-- **Three battle sizes · 三种规模：** Play `4v4`, `8v8`, or `16v16`, with balanced teams in every mode.<br>
-  支持 `4v4`、`8v8` 与 `16v16`，每种模式都会保持双方人数平衡。
+- **Four battle sizes · 四种规模：** Play `1v1`, `4v4`, `8v8`, or `16v16`, with balanced teams in every mode. The default remains `4v4`.<br>
+  支持 `1v1`、`4v4`、`8v8` 与 `16v16`，每种模式都会保持双方人数平衡，默认仍为 `4v4`。
 - **Two maps · 两张地图：** Fight across the coastal city of Bubble Harbor or the wilderness of Pinecone Valley.<br>
   可在海港都市“泡泡港城”或野外区域“松果山谷”展开战斗。
 - **Three loadouts · 三套背包：** Switch among a Barrett sniper kit, an AK-47 assault kit, and a low-recoil police machine-gun kit.<br>
@@ -43,6 +43,12 @@ Toon Strike is an original cartoon-style 3D H5 first-person shooter powered by a
   可注册唯一作战别名、查看可邀请的在线玩家、创建房间、发送邀请、接受或拒绝邀请，并在赛后查看排名。
 - **Weapon-specific audio · 武器专属音效：** Barrett shots, automatic weapons, pistols, melee attacks, grenades, and tank shells use distinct layered sound profiles.<br>
   巴雷特、自动武器、手枪、近战攻击、手雷与坦克炮均使用彼此不同的分层声音特征。
+- **Classic FPS presentation · 经典第一视角表现：** Every weapon family has its own two-handed viewmodel, movement bob, accepted-shot recoil, muzzle flash, and crosshair flame; scoped Barrett aiming hides the viewmodel.<br>
+  每类武器都有独立的双手第一视角模型、移动起伏、有效开火后坐、枪口焰与准星火焰；巴雷特开镜时会隐藏持枪模型。
+- **Independent touch controls · 双手独立触控：** The left thumb moves while the right thumb can hold FIRE and drag to aim in the same gesture, with cancellation-safe multi-touch tracking.<br>
+  左手拇指负责移动，右手拇指可在按住开火的同时拖动瞄准，并通过安全的多触点跟踪处理系统中断。
+- **Animated combatants · 动态战斗角色：** Teammates and enemies use movement-derived alternating leg strides instead of sliding across the map.<br>
+  队友与敌人会根据实际位移交替迈腿，不再以固定站姿在地图上滑行。
 - **Bilingual player UI · 双语玩家界面：** The interface supports English and Simplified Chinese, follows the browser language by default, and remembers manual language changes.<br>
   玩家界面支持英文与简体中文，默认跟随浏览器语言，并会记住手动切换的语言。
 
@@ -74,9 +80,9 @@ All firearms, grenades, and tank shells have unlimited ammunition; the loadouts 
 | Enter or leave tank · 进入或离开坦克 | `F` | `F` button · `F` 按钮 |
 | Pause · 暂停 | `Esc` | Not available · 暂不支持 |
 
-The Barrett supports an 8× scope, the tank can move and fire simultaneously, and every loadout can be changed during a match.
+The Barrett supports an 8× scope, the tank can move and fire simultaneously, and the active loadout can be changed during a match while the player is on foot.
 
-巴雷特支持 8 倍瞄准镜，坦克能够边移动边开火，并且比赛过程中可以切换全部作战背包。
+巴雷特支持 8 倍瞄准镜，坦克能够边移动边开火，并且玩家步行作战时可在比赛中切换当前作战背包。
 
 ## Online flow · 网络对战流程
 
@@ -91,9 +97,9 @@ Choose ONLINE / 选择网络版
   → Show match ranking / 展示赛后排名
 ```
 
-The browser connects to the same-origin `/ws` endpoint by default. GitHub Pages connects to `wss://mycf.wl4g.com/ws` because the static site and multiplayer backend use different origins there.
+The browser connects to the same-origin `/ws` endpoint by default. GitHub Pages can host the static game but cannot run a WebSocket server; its online mode therefore requires `VITE_MYCF_WS_URL` to point at the separately deployed Vercel endpoint.
 
-浏览器默认连接当前域名下的 `/ws`。由于 GitHub Pages 静态站点与多人后端使用不同域名，Pages 版本会连接 `wss://mycf.wl4g.com/ws`。
+浏览器默认连接当前域名下的 `/ws`。GitHub Pages 可以托管静态游戏但无法运行 WebSocket 服务，因此 Pages 的网络模式需要通过 `VITE_MYCF_WS_URL` 指向单独部署的 Vercel 端点。
 
 ## Language policy · 语言规范
 
@@ -165,6 +171,32 @@ docker run --rm --name mycf -p 8080:8080 mycf:local
 Open <http://127.0.0.1:8080/> after the container becomes healthy.<br>
 容器进入健康状态后，打开 <http://127.0.0.1:8080/>。
 
+## Vercel deployment · Vercel 部署
+
+The repository is a standard Vite plus Vercel Functions project. [`vercel.json`](vercel.json) enables Fluid compute, builds the static client into `dist/`, and rewrites same-origin `/ws` upgrades to the portable Node.js server exported by [`api/ws.js`](api/ws.js). The standalone Docker and systemd entry point reuses the same server factory, so protocol behavior stays in one implementation.<br>
+本仓库是标准的 Vite 与 Vercel Functions 项目。[`vercel.json`](vercel.json) 会启用 Fluid compute、把静态客户端构建到 `dist/`，并将同源 `/ws` 升级请求重写到 [`api/ws.js`](api/ws.js) 导出的可移植 Node.js 服务。独立 Docker 与 systemd 入口复用同一个服务工厂，因此协议行为只保留一份实现。
+
+```bash
+npx vercel login
+npx vercel
+```
+
+The Preview command above is only for validating the Vite build, `/health` route, `/ws` rewrite, and WebSocket handshake. It is not a production multiplayer deployment.<br>
+上方 Preview 命令仅用于验证 Vite 构建、`/health` 路由、`/ws` 重写与 WebSocket 握手，并不代表可用于生产的多人部署。
+
+Vercel can place WebSocket clients on different Function instances and can recycle an instance at its duration limit. A public deployment therefore needs durable room and match coordination through Redis plus client reconnection. The current in-memory runtime is suitable only for local single-process development; even a Vercel Preview deployment does not guarantee correct multiplayer routing or recovery.<br>
+Vercel 可能把 WebSocket 客户端分配到不同的 Function 实例，也可能在运行时限到达后回收实例。因此公开部署需要使用 Redis 持久协调房间与比赛状态，并在客户端实现断线重连。当前纯内存运行时仅适合本地单进程开发；即使是 Vercel Preview 部署，也无法保证多人路由与恢复行为正确。
+
+The configured Function limit is 300 seconds while a match lasts 480 seconds, so the current Preview runtime cannot complete a full match even when every player reaches the same instance. Run `npx vercel --prod` only after Redis-backed coordination, reconnect and resume support, abuse controls, and a real two-client Preview smoke test are complete.<br>
+当前 Function 运行上限为 300 秒，而一局比赛持续 480 秒；即使所有玩家恰好进入同一实例，现有 Preview 运行时也无法完成整局比赛。只有在完成 Redis 协调、断线重连与恢复、防滥用控制，以及真实 Preview 双客户端冒烟测试之后，才应执行 `npx vercel --prod`。
+
+After a managed endpoint is ready, set the repository variable below. Pull request and release builds pass it to Vite, allowing the GitHub Pages mirror to connect without hard-coding a deployment domain.<br>
+托管端点准备就绪后，请设置下方仓库变量。Pull Request 与发布构建会把它传给 Vite，使 GitHub Pages 镜像无需硬编码部署域名即可连接。
+
+```bash
+gh variable set MYCF_WS_URL --body "https://<project>.vercel.app"
+```
+
 ## CI, release and deployment · 持续集成、发布与部署
 
 [Pull Request CI](.github/workflows/ci.yml) maintains one live English status comment, installs dependencies, runs every test, and validates the production build. Each comment is updated from the started state to the final result, and stale runs cannot overwrite a newer run.
@@ -187,12 +219,19 @@ The detailed versioning and pipeline rules are documented in [CI/CD Architecture
 
 详细的版本计算与流水线规则见 [CI/CD Architecture](.github/workflows/README.md)。GitHub Pages 必须使用 **GitHub Actions** 作为部署源。
 
-## Production constraints · 线上部署约束
+## Deployment constraints · 部署约束
 
-- **Backend binding · 后端监听：** The host deployment binds the Node.js service only to `127.0.0.1:8787`.<br>
-  宿主机部署只允许 Node.js 服务监听 `127.0.0.1:8787`。
-- **Shared domain · 共用域名：** The public game uses `https://mycf.wl4g.com`, and multiplayer WebSocket traffic uses `wss://mycf.wl4g.com/ws`.<br>
-  公网游戏使用 `https://mycf.wl4g.com`，多人 WebSocket 流量使用 `wss://mycf.wl4g.com/ws`。
+- **Managed preview target · 托管预览目标：** Vercel serves the static client and same-origin `/ws` Function; Fluid compute must remain enabled, and the deployment remains preview-only until shared durable state and reconnection are implemented.<br>
+  Vercel 同时提供静态客户端与同源 `/ws` Function，并且必须保持启用 Fluid compute；在实现共享持久状态与断线重连之前，该部署仅用于预览。
+- **Static mirror · 静态镜像：** GitHub Pages remains the top-of-document experience link for solo play and uses `VITE_MYCF_WS_URL` when a managed multiplayer endpoint is configured.<br>
+  GitHub Pages 继续作为文档顶部的单机体验链接；配置托管多人端点后，会通过 `VITE_MYCF_WS_URL` 使用网络模式。
+- **Durable multiplayer state · 持久多人状态：** Public scale-out must not rely on Function memory for aliases, presence, invitations, rooms, or authoritative matches.<br>
+  公开扩容时，别名、在线状态、邀请、房间与服务器权威比赛均不得只依赖 Function 内存。
+- **Legacy host binding · 传统宿主机监听：** If the optional host deployment is used, the Node.js service binds only to `127.0.0.1:8787`.<br>
+  如果使用可选的传统宿主机部署，Node.js 服务只能监听 `127.0.0.1:8787`。
+
+- **WebSocket routing · WebSocket 路由：** Host deployments expose WebSocket upgrades at `/ws` through their public reverse proxy.<br>
+  宿主机部署通过公网反向代理在 `/ws` 路径提供 WebSocket 升级。
 - **Nginx scope · Nginx 范围：** Only `/etc/nginx/conf.d/mycf.conf` may be changed; every other Nginx configuration file is out of scope.<br>
   只允许修改 `/etc/nginx/conf.d/mycf.conf`，禁止修改任何其他 Nginx 配置文件。
 - **Tracked template · 仓库模板：** The repository template is `deploy/mycf.nginx.conf`.<br>

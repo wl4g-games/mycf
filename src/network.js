@@ -4,6 +4,25 @@ function networkError(code, message) {
   return error;
 }
 
+export function resolveWebSocketUrl(locationValue, configuredValue = "") {
+  const configured = String(configuredValue || "").trim();
+  if (configured) {
+    const endpoint = new URL(configured, locationValue.href);
+    if (endpoint.protocol === "http:") endpoint.protocol = "ws:";
+    if (endpoint.protocol === "https:") endpoint.protocol = "wss:";
+    if (endpoint.protocol !== "ws:" && endpoint.protocol !== "wss:") {
+      throw networkError("BAD_WS_ENDPOINT", "The configured multiplayer endpoint must use HTTP or WebSocket transport.");
+    }
+    if (endpoint.pathname === "/") endpoint.pathname = "/ws";
+    return endpoint.href;
+  }
+  if (locationValue.hostname.endsWith(".github.io")) {
+    throw networkError("WS_ENDPOINT_REQUIRED", "This static deployment requires a separate multiplayer endpoint.");
+  }
+  const protocol = locationValue.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${locationValue.host}/ws`;
+}
+
 export class NetworkClient {
   constructor() {
     this.socket = null;
@@ -27,9 +46,12 @@ export class NetworkClient {
 
   connectAndRegister(alias, loadoutId) {
     if (this.registerPromise) return this.registerPromise;
-    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-    const pagesUrl = location.hostname.endsWith(".github.io") ? "wss://mycf.wl4g.com/ws" : null;
-    const url = window.MYCF_WS_URL || pagesUrl || `${protocol}//${location.host}/ws`;
+    let url;
+    try {
+      url = resolveWebSocketUrl(location, window.MYCF_WS_URL || import.meta.env?.VITE_MYCF_WS_URL);
+    } catch (error) {
+      return Promise.reject(error);
+    }
     this.registerPromise = new Promise((resolve, reject) => {
       const socket = new WebSocket(url);
       this.socket = socket;

@@ -1,4 +1,4 @@
-import { GAME_MODES, LOADOUTS, MAPS, TEAM, THROWABLES, WEAPONS, distance, isSolid, normalizeAngle, spawnCells } from "./config.js?v=20261004-i18n";
+import { GAME_MODES, LOADOUTS, MAPS, TEAM, THROWABLES, WEAPONS, distance, isSolid, normalizeAngle, spawnCells } from "./config.js?v=20261004-fps-v3";
 
 export class NetworkGameState {
   constructor(client, audio, emit = () => {}) {
@@ -81,6 +81,11 @@ export class NetworkGameState {
         if (event.profile === "knife" || event.profile === "axe") this.audio.knife(event.profile);
         else this.audio.gunshot(event.profile);
         this.shake = event.profile === "sniper" ? .48 : event.profile === "machinegun" ? .25 : .18;
+        this.emit("shot", {
+          actorId: event.actorId,
+          weaponId: event.weaponId || this.player?.weaponId,
+          profile: event.profile,
+        });
       } else {
         this.audio.distantShot(event.profile, 12);
       }
@@ -107,6 +112,18 @@ export class NetworkGameState {
       angle: this.localAngle,
       fireHeld: input.fireHeld,
       actions: this.pendingActions.splice(0),
+    });
+  }
+
+  suspendInput() {
+    if (!this.started || this.finished || !this.player) return;
+    this.pendingActions.length = 0;
+    this.sendClock = 0;
+    this.client.sendInput({
+      movement: { x: 0, y: 0 },
+      angle: this.localAngle,
+      fireHeld: false,
+      actions: [],
     });
   }
 

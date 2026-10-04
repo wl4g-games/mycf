@@ -71,6 +71,7 @@ jobs:
       - name: Build production bundle
         env:
           PAGES_BASE: /${{ github.event.repository.name }}/
+          VITE_MYCF_WS_URL: ${{ vars.MYCF_WS_URL }}
         run: npm run build -- --base="${PAGES_BASE}"
 
   comment-final:
