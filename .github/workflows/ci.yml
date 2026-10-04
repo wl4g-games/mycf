@@ -22,15 +22,16 @@ jobs:
     name: Report CI start
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       issues: write
       pull-requests: write
     steps:
-      - name: Checkout CI comment script
+      - name: Checkout trusted CI comment script
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.base.sha }}
           sparse-checkout: .github/scripts
           persist-credentials: false
 
@@ -39,6 +40,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           MYCF_PR_NUMBER: ${{ github.event.pull_request.number }}
           MYCF_COMMENT_PHASE: started
+          MYCF_RUN_ID: ${{ github.run_id }}
           MYCF_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           node .github/scripts/upsert-pr-ci-comment.mjs || \
@@ -76,15 +78,16 @@ jobs:
     needs: [comment-start, build-and-test]
     if: ${{ always() && github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       issues: write
       pull-requests: write
     steps:
-      - name: Checkout CI comment script
+      - name: Checkout trusted CI comment script
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.base.sha }}
           sparse-checkout: .github/scripts
           persist-credentials: false
 
@@ -93,6 +96,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           MYCF_PR_NUMBER: ${{ github.event.pull_request.number }}
           MYCF_COMMENT_PHASE: final
+          MYCF_RUN_ID: ${{ github.run_id }}
           MYCF_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           MYCF_CI_RESULT: ${{ needs.build-and-test.result }}
         run: |

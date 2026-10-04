@@ -15,6 +15,7 @@ function render(phase, result) {
       MYCF_PR_NUMBER: "42",
       MYCF_COMMENT_DRY_RUN: "true",
       MYCF_COMMENT_PHASE: phase,
+      MYCF_RUN_ID: "42",
       MYCF_RUN_URL: "https://github.com/wl4g-games/mycf/actions/runs/42",
       MYCF_CI_RESULT: result || "",
     },
@@ -25,12 +26,12 @@ function render(phase, result) {
 
 test("PR CI comment reports a pending run without exposing a token", () => {
   const comment = render("started");
-  assert.match(comment, /<!-- mycf-ci-status -->/);
+  assert.match(comment, /<!-- mycf-ci-status run-id=42 -->/);
   assert.match(comment, /⏳/);
   assert.doesNotMatch(comment, /dry-run-token/);
 });
 
 test("PR CI comment reports final success and failure in place", () => {
-  assert.match(render("final", "success"), /✅ success[\s\S]*CI 已通过/);
-  assert.match(render("final", "failure"), /❌ failure[\s\S]*CI 未通过/);
+  assert.match(render("final", "success"), /✅ success[\s\S]*CI passed/);
+  assert.match(render("final", "failure"), /❌ failure[\s\S]*CI did not pass/);
 });

@@ -1,4 +1,4 @@
-import { FOV, MAPS, SCOPED_FOV, TEAM, THROWABLES, clamp, normalizeAngle, tileAt } from "./config.js?v=20261003-v2";
+import { FOV, MAPS, SCOPED_FOV, TEAM, THROWABLES, clamp, normalizeAngle, tileAt } from "./config.js?v=20261004-i18n";
 
 const TEAM_COLORS = {
   seal: { main: "#2ca9df", shade: "#155d91", light: "#75dcff", gear: "#17394f" },

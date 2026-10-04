@@ -1,7 +1,7 @@
 import {
   BOT_NAMES, GAME_MODES, LOADOUTS, MAPS, MATCH_TIME, TEAM, THROWABLES, WEAPONS,
   clamp, distance, isSolid, normalizeAngle, spawnCells,
-} from "./config.js?v=20261003-v2";
+} from "./config.js?v=20261004-i18n";
 
 const TEAMS = [TEAM.SEAL, TEAM.TERROR];
 const randomItem = list => list[Math.floor(Math.random() * list.length)];
@@ -145,7 +145,7 @@ export class GameState {
     actor.scoped = false;
     if (actor.isPlayer) {
       this.audio.select();
-      this.emit("announce", `已切换背包 ${loadout.number} · ${loadout.name}`);
+      this.emit("announce", { key: "announce.loadoutChanged", loadoutId: loadout.id });
     }
   }
 
@@ -185,7 +185,7 @@ export class GameState {
     }
     const spread = actor.scoped && weapon.scopedSpread != null ? weapon.scopedSpread : weapon.spread;
     const victim = this.findTargetInArc(actor, weapon.range, spread);
-    if (victim) this.damage(victim, weapon.damage, actor, weapon.name);
+    if (victim) this.damage(victim, weapon.damage, actor, weapon.id);
   }
 
   findTargetInArc(actor, range, margin) {
@@ -231,7 +231,7 @@ export class GameState {
       const side = this.tank.angle + Math.PI / 2;
       const exit = { x: this.tank.x + Math.cos(side) * 1.1, y: this.tank.y + Math.sin(side) * 1.1 };
       if (!this.collides(exit.x, exit.y, .24)) Object.assign(actor, exit);
-      if (actor.isPlayer) this.emit("announce", "已离开泡泡坦克");
+      if (actor.isPlayer) this.emit("announce", { key: "announce.leftTank" });
       return;
     }
     if (!this.tank.driverId && this.tank.health > 0 && distance(actor, this.tank) < 1.65) {
@@ -240,7 +240,7 @@ export class GameState {
       actor.scoped = false;
       actor.x = this.tank.x;
       actor.y = this.tank.y;
-      if (actor.isPlayer) this.emit("announce", "M-77 泡泡坦克已启动");
+      if (actor.isPlayer) this.emit("announce", { key: "announce.startedTank" });
     }
   }
 
@@ -299,7 +299,7 @@ export class GameState {
       const weapon = WEAPONS[bot.weaponId] || WEAPONS.ak47;
       if (visible && targetDistance < weapon.range && Math.abs(normalizeAngle(Math.atan2(target.y - bot.y, target.x - bot.x) - bot.angle)) < .2 && bot.cooldown <= 0) {
         bot.cooldown = Math.max(.16, weapon.interval * 2.8 + Math.random() * .45);
-        if (Math.random() < clamp(.78 - targetDistance * .035, .2, .72)) this.damage(target, weapon.damage * .34, bot, weapon.name);
+        if (Math.random() < clamp(.78 - targetDistance * .035, .2, .72)) this.damage(target, weapon.damage * .34, bot, weapon.id);
       }
       if (Math.random() < dt * .008 && targetDistance < 10) this.throwGrenade(bot);
     }
@@ -336,7 +336,7 @@ export class GameState {
     for (const actor of this.actors) {
       if (!actor.alive || actor.team === projectile.team) continue;
       const actorDistance = distance(actor, projectile);
-      if (actorDistance < radius && this.hasClearGeometry(projectile, actor)) this.damage(actor, power * (1 - actorDistance / radius), projectile.owner, projectile.type === "shell" ? "坦克主炮" : throwable.name);
+      if (actorDistance < radius && this.hasClearGeometry(projectile, actor)) this.damage(actor, power * (1 - actorDistance / radius), projectile.owner, projectile.type === "shell" ? "tankCannon" : throwable.id);
     }
   }
 

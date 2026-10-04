@@ -1,3 +1,9 @@
+function networkError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
 export class NetworkClient {
   constructor() {
     this.socket = null;
@@ -29,13 +35,13 @@ export class NetworkClient {
       this.socket = socket;
       const timeout = window.setTimeout(() => {
         this.registerPromise = null;
-        reject(new Error("连接超时，请检查网络后重试"));
+        reject(networkError("CONNECTION_TIMEOUT", "Connection timed out."));
         socket.close();
       }, 8000);
       const cleanup = () => window.clearTimeout(timeout);
       socket.addEventListener("open", () => {
         this.connected = true;
-        this.emit("status", { connected: true, message: "已连接，正在注册…" });
+        this.emit("status", { connected: true, code: "REGISTERING" });
         this.send("register", { alias, loadoutId });
       });
       socket.addEventListener("message", event => {
@@ -53,7 +59,7 @@ export class NetworkClient {
         if (message.type === "error" && !this.self) {
           cleanup();
           this.registerPromise = null;
-          reject(new Error(payload.message || "注册失败"));
+          reject(networkError(payload.code || "REGISTRATION_FAILED", payload.message || "Registration failed."));
         }
         this.emit(message.type, payload);
       });
@@ -61,13 +67,13 @@ export class NetworkClient {
         cleanup();
         this.connected = false;
         this.registerPromise = null;
-        this.emit("status", { connected: false, message: "与服务器的连接已断开" });
+        this.emit("status", { connected: false, code: "DISCONNECTED" });
       });
       socket.addEventListener("error", () => {
         if (!this.self) {
           cleanup();
           this.registerPromise = null;
-          reject(new Error("无法连接多人服务器"));
+          reject(networkError("CONNECTION_FAILED", "Unable to connect to the multiplayer server."));
         }
       });
     });
