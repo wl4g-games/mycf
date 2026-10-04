@@ -7,7 +7,7 @@ GitHub Release, an amd64 GHCR image, and a GitHub Pages deployment.
 
 | File | Trigger | Responsibility |
 |---|---|---|
-| `ci.yml` | Pull request opened, updated, reopened, or marked ready | Install dependencies, run tests, and verify the production build |
+| `ci.yml` | Pull request opened, updated, reopened, or marked ready | Maintain one live PR status comment, install dependencies, run tests, and verify the production build |
 | `release.yml` | Push to `main` (including a merged PR), or manual dispatch | Package `dist`, publish a GitHub Release, then publish an amd64 image and deploy Pages in parallel |
 
 ## Release pipeline
@@ -32,8 +32,19 @@ inspect all commits since the highest stable `vX.Y.Z` tag:
 If a workflow is rerun for a commit that is already tagged, it reuses that tag
 instead of incrementing the version again.
 
+## Pull request status comment
+
+PR validation uses `.github/scripts/upsert-pr-ci-comment.mjs` to maintain one
+sticky comment marked with `<!-- mycf-ci-status -->`. The start job creates or
+updates the pending state; the final job runs with `always()` and replaces it
+with the build result. Comment API failures are warnings and never override the
+actual test/build result.
+
+The reporting jobs receive only `contents: read`, `issues: write`, and
+`pull-requests: write`. The build job retains read-only repository access.
+
 ## Required repository setting
 
-For the first deployment, select **Settings -> Pages -> Build and deployment
--> Source -> GitHub Actions**. The workflow uses only the repository-scoped
-`GITHUB_TOKEN`; no deployment secret is required.
+GitHub Pages is configured to use **GitHub Actions** as its source. The
+workflows use only the repository-scoped `GITHUB_TOKEN`; no deployment secret
+is required.
