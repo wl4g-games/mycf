@@ -45,3 +45,21 @@ test("registered users can create, invite, accept and start an underfilled room"
   assert.equal(match.actors.filter(actor => actor.isBot).length, 14);
   match.finished = true;
 });
+
+test("a 1v1 room reports two seats and fills an early start with one AI opponent", () => {
+  const lobby = new LobbyService();
+  const ownerSocket = new FakeSocket();
+  const owner = lobby.connect(ownerSocket, {});
+  ownerSocket.receive("register", { alias: "Duelist", loadoutId: "recon" });
+  assert.ok(ownerSocket.take("registered"));
+  ownerSocket.receive("create_room", { mapId: "city", modeId: "1v1" });
+  const created = ownerSocket.take("room_state").room;
+  assert.equal(created.maxHumans, 2);
+  ownerSocket.receive("start_room");
+  assert.ok(ownerSocket.take("match_start"));
+  const match = lobby.rooms.get(created.id).match;
+  assert.equal(match.actors.length, 2);
+  assert.equal(match.actors.filter(actor => actor.isBot).length, 1);
+  assert.deepEqual(match.assignmentFor(owner.id), { actorId: "seal-0", team: "seal" });
+  match.finished = true;
+});

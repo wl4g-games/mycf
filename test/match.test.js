@@ -2,6 +2,23 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { AuthoritativeMatch } from "../server/match.js";
 
+test("1v1 creates one actor per team and assigns two players to opposing sides", () => {
+  const members = [
+    { id: "duelist-a", alias: "Alpha", loadoutId: "recon" },
+    { id: "duelist-b", alias: "Bravo", loadoutId: "raider" },
+  ];
+  const match = new AuthoritativeMatch(
+    { id: "DUEL01", mapId: "city", modeId: "1v1" },
+    members,
+    () => {},
+    () => {},
+  );
+  assert.equal(match.actors.length, 2);
+  assert.equal(match.actors.filter(actor => actor.isBot).length, 0);
+  assert.deepEqual(members.map(member => match.assignmentFor(member.id).team), ["seal", "terror"]);
+  assert.equal(match.mode.scoreLimit, 10);
+});
+
 test("an underfilled 4v4 match creates balanced AI replacements and rankings", () => {
   let finished = null;
   const match = new AuthoritativeMatch(

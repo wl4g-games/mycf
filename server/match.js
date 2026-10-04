@@ -232,7 +232,7 @@ export class AuthoritativeMatch {
     if (!actor.alive || actor.cooldown > 0) return;
     const weapon = WEAPONS[actor.weaponId] || WEAPONS.ak47;
     actor.cooldown = weapon.interval;
-    this.emit({ type: "shot", actorId: actor.id, userId: actor.userId, profile: weapon.visual });
+    this.emit({ type: "shot", actorId: actor.id, userId: actor.userId, weaponId: weapon.id, profile: weapon.visual });
     const spread = actor.scoped && weapon.scopedSpread != null ? weapon.scopedSpread : weapon.spread;
     const victim = this.findTargetInArc(actor, weapon.range, spread);
     if (victim) this.damage(victim, weapon.damage, actor, weapon.id);

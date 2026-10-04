@@ -68,6 +68,7 @@ export const MAPS = Object.freeze({
 });
 
 export const GAME_MODES = Object.freeze({
+  "1v1": { id: "1v1", label: "1 VS 1", teamSize: 1, scoreLimit: 10 },
   "4v4": { id: "4v4", label: "4 VS 4", teamSize: 4, scoreLimit: 15 },
   "8v8": { id: "8v8", label: "8 VS 8", teamSize: 8, scoreLimit: 30 },
   "16v16": { id: "16v16", label: "16 VS 16", teamSize: 16, scoreLimit: 50 },

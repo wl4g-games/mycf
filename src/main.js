@@ -1,11 +1,11 @@
-import { LOADOUTS, MAPS, TEAM, THROWABLES, WEAPONS } from "./config.js?v=20261004-i18n";
-import { GameAudio } from "./audio.js?v=20261004-i18n";
-import { GameState } from "./game.js?v=20261004-i18n";
-import { applyDocumentTranslations, onLocaleChange, t, toggleLocale } from "./i18n.js?v=20261004-i18n";
-import { InputController } from "./input.js?v=20261004-i18n";
-import { NetworkClient } from "./network.js?v=20261004-i18n";
-import { NetworkGameState } from "./network-game.js?v=20261004-i18n";
-import { Renderer } from "./renderer.js?v=20261004-i18n";
+import { LOADOUTS, MAPS, TEAM, THROWABLES, WEAPONS } from "./config.js?v=20261004-fps-v3";
+import { GameAudio } from "./audio.js?v=20261004-fps-v3";
+import { GameState } from "./game.js?v=20261004-fps-v3";
+import { applyDocumentTranslations, onLocaleChange, t, toggleLocale } from "./i18n.js?v=20261004-fps-v3";
+import { InputController } from "./input.js?v=20261004-fps-v3";
+import { NetworkClient } from "./network.js?v=20261004-fps-v3";
+import { NetworkGameState } from "./network-game.js?v=20261004-fps-v3";
+import { Renderer } from "./renderer.js?v=20261004-fps-v3";
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => Array.from(document.querySelectorAll(selector));
@@ -33,6 +33,10 @@ let lastTime = performance.now();
 let pendingInvite = null;
 
 function handleGameEvent(type, payload) {
+  if (type === "shot") {
+    renderer.triggerShot(payload);
+    if (payload.profile !== "knife" && payload.profile !== "axe") pulseReticleFlash();
+  }
   if (type === "announce") announce(localizeAnnouncement(payload));
   if (type === "death") {
     modalMode = "death";
@@ -51,6 +55,13 @@ function handleGameEvent(type, payload) {
     );
     exitPointerLock();
   }
+}
+
+function pulseReticleFlash() {
+  const flash = $("#reticle-flash");
+  flash.classList.remove("pulse");
+  void flash.offsetWidth;
+  flash.classList.add("pulse");
 }
 
 const singleGame = new GameState(audio, handleGameEvent);
@@ -223,6 +234,15 @@ function enterBattle() {
   rankingModal.classList.add("is-hidden");
   lockPointer();
   audio.unlock();
+}
+
+function pauseBattle() {
+  if (!game.started || game.finished || paused) return;
+  paused = true;
+  input.resetTransient();
+  if (game === networkGame) networkGame.suspendInput();
+  modalMode = "pause";
+  showModal(t("modal.paused.title"), t(selected.versionId === "network" ? "modal.networkContinues" : "modal.paused.copy"), t("modal.tactical"));
 }
 
 function returnToLobby() {
@@ -462,14 +482,12 @@ function frame(now) {
   const forwarded = [];
   for (const action of state.items) {
     if (action[0] === "pause" && game.started && !game.finished) {
-      paused = true;
-      modalMode = "pause";
-      showModal(t("modal.paused.title"), t(selected.versionId === "network" ? "modal.networkContinues" : "modal.paused.copy"), t("modal.tactical"));
+      pauseBattle();
       exitPointerLock();
     } else forwarded.push(action);
   }
-  if (!paused) game.update(dt, { ...state, items: forwarded, movement: input.movement(), fireHeld: input.fireHeld });
-  renderer.render(game);
+  if (!paused) game.update(dt, { ...state, items: forwarded });
+  renderer.render(game, paused ? 0 : dt);
   if (game.started) updateHud(dt);
   requestAnimationFrame(frame);
 }
@@ -509,12 +527,13 @@ window.addEventListener("keydown", event => {
 document.addEventListener("pointerlockchange", () => {
   if (!game.started || game.finished || touchDevice) return;
   if (document.pointerLockElement !== canvas && modalMode !== "death") {
-    paused = true;
-    modalMode = "pause";
-    showModal(t("modal.paused.title"), t(selected.versionId === "network" ? "modal.networkContinues" : "modal.paused.copy"), t("modal.tactical"));
+    pauseBattle();
   }
 });
-window.addEventListener("blur", () => { input.fireHeld = false; input.keys.clear(); });
+window.addEventListener("blur", () => {
+  input.resetTransient();
+  if (game === networkGame) networkGame.suspendInput();
+});
 onLocaleChange(() => {
   updateStartButtonLabel();
   renderPendingInvite();

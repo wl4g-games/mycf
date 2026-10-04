@@ -1,11 +1,54 @@
+export class TouchAimState {
+  constructor(sensitivity = .0052) {
+    this.sensitivity = sensitivity;
+    this.pointers = new Map();
+    this.firePointers = new Set();
+    this.yaw = 0;
+  }
+
+  begin(identifier, x, fire = false) {
+    if (identifier == null || !Number.isFinite(x)) return;
+    this.pointers.set(identifier, { x });
+    if (fire) this.firePointers.add(identifier);
+  }
+
+  move(identifier, x) {
+    const pointer = this.pointers.get(identifier);
+    if (!pointer || !Number.isFinite(x)) return 0;
+    const delta = (x - pointer.x) * this.sensitivity;
+    pointer.x = x;
+    this.yaw += delta;
+    return delta;
+  }
+
+  end(identifier) {
+    this.pointers.delete(identifier);
+    this.firePointers.delete(identifier);
+  }
+
+  clear() {
+    this.pointers.clear();
+    this.firePointers.clear();
+    this.yaw = 0;
+  }
+
+  consumeYaw() {
+    const yaw = this.yaw;
+    this.yaw = 0;
+    return yaw;
+  }
+
+  get fireHeld() { return this.firePointers.size > 0; }
+}
+
 export class InputController {
   constructor(canvas) {
     this.canvas = canvas;
     this.keys = new Set();
     this.items = [];
     this.yaw = 0;
-    this.fireHeld = false;
-    this.touchAim = null;
+    this.mouseFireHeld = false;
+    this.touchAim = new TouchAimState();
     this.moveTouch = null;
     this.touchMovement = { x: 0, y: 0 };
     this.bindKeyboard();
@@ -33,7 +76,7 @@ export class InputController {
       if (document.pointerLockElement === this.canvas) this.yaw += event.movementX * .00215;
     });
     this.canvas.addEventListener("mousedown", event => {
-      if (event.button === 0) { this.fireHeld = true; this.items.push(["fire"]); }
+      if (event.button === 0) { this.mouseFireHeld = true; this.items.push(["fire"]); }
       if (event.button === 2) this.items.push(["scope"]);
       if (typeof this.canvas.requestPointerLock === "function" && navigator.maxTouchPoints === 0) {
         try {
@@ -42,7 +85,7 @@ export class InputController {
         } catch (error) {}
       }
     });
-    window.addEventListener("mouseup", event => { if (event.button === 0) this.fireHeld = false; });
+    window.addEventListener("mouseup", event => { if (event.button === 0) this.mouseFireHeld = false; });
   }
 
   bindTouch() {
@@ -83,39 +126,55 @@ export class InputController {
       pad.addEventListener("touchcancel", release, { passive: true });
     }
 
+    const beginAim = (event, fire = false) => {
+      for (const touch of event.changedTouches) this.touchAim.begin(touch.identifier, touch.clientX, fire);
+    };
+    const moveAim = event => {
+      let handled = false;
+      for (const touch of event.changedTouches) {
+        if (!this.touchAim.pointers.has(touch.identifier)) continue;
+        this.touchAim.move(touch.identifier, touch.clientX);
+        handled = true;
+      }
+      if (handled && event.cancelable) event.preventDefault();
+    };
+    const endAim = event => {
+      for (const touch of event.changedTouches) this.touchAim.end(touch.identifier);
+    };
+
     this.canvas.addEventListener("touchstart", event => {
-      const touch = event.changedTouches[0];
-      if (!touch || event.target !== this.canvas) return;
-      this.touchAim = { id: touch.identifier, x: touch.clientX };
+      if (event.target === this.canvas) beginAim(event);
     }, { passive: true });
     this.canvas.addEventListener("touchmove", event => {
-      if (!this.touchAim) return;
-      const touch = [...event.changedTouches].find(item => item.identifier === this.touchAim.id);
-      if (!touch) return;
-      event.preventDefault();
-      this.yaw += (touch.clientX - this.touchAim.x) * .0052;
-      this.touchAim.x = touch.clientX;
+      moveAim(event);
     }, { passive: false });
-    this.canvas.addEventListener("touchend", event => {
-      if (this.touchAim && [...event.changedTouches].some(item => item.identifier === this.touchAim.id)) this.touchAim = null;
-    }, { passive: true });
+    this.canvas.addEventListener("touchend", endAim, { passive: true });
+    this.canvas.addEventListener("touchcancel", endAim, { passive: true });
 
     document.querySelectorAll("#mobile-controls [data-action]").forEach(button => {
       const action = button.dataset.action;
       button.addEventListener("touchstart", event => {
         event.preventDefault();
-        if (action === "fire") this.fireHeld = true;
+        if (action === "fire") beginAim(event, true);
         this.items.push([action]);
       }, { passive: false });
+      if (action === "fire") button.addEventListener("touchmove", moveAim, { passive: false });
       button.addEventListener("touchend", event => {
         event.preventDefault();
-        if (action === "fire") this.fireHeld = false;
+        if (action === "fire") endAim(event);
+      }, { passive: false });
+      button.addEventListener("touchcancel", event => {
+        if (event.cancelable) event.preventDefault();
+        if (action === "fire") endAim(event);
       }, { passive: false });
       button.addEventListener("mousedown", () => {
-        if (action === "fire") this.fireHeld = true;
+        if (action === "fire") this.mouseFireHeld = true;
         this.items.push([action]);
       });
-      button.addEventListener("mouseup", () => { if (action === "fire") this.fireHeld = false; });
+      button.addEventListener("mouseup", () => { if (action === "fire") this.mouseFireHeld = false; });
+      button.addEventListener("mouseleave", event => {
+        if (action === "fire" && event.buttons === 0) this.mouseFireHeld = false;
+      });
     });
   }
 
@@ -127,8 +186,23 @@ export class InputController {
   }
 
   consume() {
-    const state = { yaw: this.yaw, items: this.items.splice(0) };
+    const state = {
+      yaw: this.yaw + this.touchAim.consumeYaw(),
+      items: this.items.splice(0),
+      movement: this.movement(),
+      fireHeld: this.mouseFireHeld || this.touchAim.fireHeld,
+    };
     this.yaw = 0;
     return state;
+  }
+
+  resetTransient() {
+    this.keys.clear();
+    this.items.length = 0;
+    this.yaw = 0;
+    this.mouseFireHeld = false;
+    this.touchAim.clear();
+    this.moveTouch = null;
+    this.touchMovement = { x: 0, y: 0 };
   }
 }

@@ -1,7 +1,7 @@
 import {
   BOT_NAMES, GAME_MODES, LOADOUTS, MAPS, MATCH_TIME, TEAM, THROWABLES, WEAPONS,
   clamp, distance, isSolid, normalizeAngle, spawnCells,
-} from "./config.js?v=20261004-i18n";
+} from "./config.js?v=20261004-fps-v3";
 
 const TEAMS = [TEAM.SEAL, TEAM.TERROR];
 const randomItem = list => list[Math.floor(Math.random() * list.length)];
@@ -182,6 +182,7 @@ export class GameState {
       if (weapon.visual === "knife" || weapon.visual === "axe") this.audio.knife(weapon.visual);
       else this.audio.gunshot(weapon.visual);
       this.shake = weapon.visual === "sniper" ? .48 : weapon.visual === "machinegun" ? .24 : .16;
+      this.emit("shot", { actorId: actor.id, weaponId: weapon.id, profile: weapon.visual });
     }
     const spread = actor.scoped && weapon.scopedSpread != null ? weapon.scopedSpread : weapon.spread;
     const victim = this.findTargetInArc(actor, weapon.range, spread);

@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#143a57" />
     <meta name="description" content="Toon Strike is an original cartoon 3D H5 shooter with solo and online multiplayer, two maps, three loadouts, and battles up to 16v16." data-i18n-content="meta.description" />
     <title data-i18n="meta.title">Toon Strike</title>
-    <link rel="stylesheet" href="styles.css?v=20261004-i18n" />
+    <link rel="stylesheet" href="styles.css?v=20261004-fps-v3" />
   </head>
   <body>
     <main id="game-shell">
@@ -51,6 +51,7 @@
             <section class="setup-group compact">
               <p><b>03</b> <span data-i18n="setup.mode.prompt">Team size</span></p>
               <div class="mode-options">
+                <button type="button" class="mode-option" data-mode="1v1"><strong>1V1</strong><small data-i18n="mode.1v1.description">HEAD-TO-HEAD</small></button>
                 <button type="button" class="mode-option selected" data-mode="4v4"><strong>4V4</strong><small data-i18n="mode.4v4.description">TACTICAL SQUAD</small></button>
                 <button type="button" class="mode-option" data-mode="8v8"><strong>8V8</strong><small data-i18n="mode.8v8.description">MEDIUM BATTLE</small></button>
                 <button type="button" class="mode-option" data-mode="16v16"><strong>16V16</strong><small data-i18n="mode.16v16.description">FULL ASSAULT</small></button>
@@ -116,6 +117,7 @@
         <div id="interaction" class="interaction is-hidden"><kbd>F</kbd><span data-i18n="hud.interactTank">DRIVE M-77 BUBBLE TANK</span></div>
         <div id="announcement" class="announcement is-hidden"></div>
         <div id="crosshair" class="crosshair"><i></i><i></i><i></i><i></i><b></b></div>
+        <div id="reticle-flash" class="reticle-flash" aria-hidden="true"></div>
         <div id="hit-marker" class="hit-marker">×</div>
         <div id="scope" class="scope"><div class="scope-ring"></div><i class="scope-h"></i><i class="scope-v"></i><span>8×</span></div>
         <div class="vignette"></div>
@@ -165,6 +167,6 @@
         <button type="button" id="ranking-close" class="primary-button"><span data-i18n="ranking.return">RETURN TO ROOM</span></button>
       </section>
     </main>
-    <script type="module" src="src/main.js?v=20261004-i18n"></script>
+    <script type="module" src="src/main.js?v=20261004-fps-v3"></script>
   </body>
 </html>

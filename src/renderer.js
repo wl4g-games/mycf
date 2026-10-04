@@ -1,4 +1,6 @@
-import { FOV, MAPS, SCOPED_FOV, TEAM, THROWABLES, clamp, normalizeAngle, tileAt } from "./config.js?v=20261004-i18n";
+import { FOV, MAPS, SCOPED_FOV, TEAM, THROWABLES, clamp, normalizeAngle, tileAt } from "./config.js?v=20261004-fps-v3";
+import { MotionTracker, gaitPose } from "./render-animation.js?v=20261004-fps-v3";
+import { WeaponViewmodel } from "./weapon-viewmodel.js?v=20261004-fps-v3";
 
 const TEAM_COLORS = {
   seal: { main: "#2ca9df", shade: "#155d91", light: "#75dcff", gear: "#17394f" },
@@ -40,6 +42,9 @@ export class Renderer {
     this.height = 0;
     this.depth = new Float32Array(1);
     this.backdropCache = new Map();
+    this.motionTracker = new MotionTracker();
+    this.weaponViewmodel = new WeaponViewmodel();
+    this.animationTime = 0;
     this.backgrounds = {};
     Object.values(MAPS).forEach(map => {
       const image = new Image();
@@ -63,8 +68,18 @@ export class Renderer {
     this.backdropCache.clear();
   }
 
-  render(game) {
+  render(game, dt = 0) {
     if (!game.player || !game.map) return;
+    const animationDelta = clamp(Number(dt) || 0, 0, .05);
+    this.animationTime += animationDelta;
+    this.weaponViewmodel.advance(animationDelta);
+    const actorIds = new Set();
+    for (const actor of game.actors) {
+      if (!actor.alive) continue;
+      actorIds.add(actor.id);
+      this.motionTracker.sample(actor.id, actor, animationDelta);
+    }
+    this.motionTracker.retain(actorIds);
     const ctx = this.context;
     const fov = game.player.scoped ? SCOPED_FOV : FOV;
     const focal = this.width / (2 * Math.tan(fov / 2));
@@ -85,6 +100,8 @@ export class Renderer {
     ctx.restore();
     this.drawRadar(game);
   }
+
+  triggerShot(payload) { this.weaponViewmodel.triggerShot(payload); }
 
   drawBackdrop(game, horizon) {
     const ctx = this.context;
@@ -281,7 +298,9 @@ export class Renderer {
     const ctx = this.context;
     const colors = TEAM_COLORS[sprite.team] || TEAM_COLORS.terror;
     const scale = unit * .98;
-    const bob = Math.sin(performance.now() * .005 + sprite.index * 1.7) * scale * .012;
+    const motion = gaitPose(this.motionTracker.get(sprite.id));
+    const idlePhase = this.animationTime * 2 + (Number(sprite.index) || 0) * 1.7;
+    const bob = (Math.sin(idlePhase) * .004 - motion.bounce * .026) * scale;
     const fog = clamp(1.15 - forward / 38, .28, 1);
     ctx.globalAlpha = fog;
     ctx.fillStyle = "rgba(22,31,42,.38)";
@@ -296,10 +315,8 @@ export class Renderer {
     ctx.lineWidth = .035;
     ctx.strokeStyle = "#172536";
 
-    this.fillStrokeCapsule(ctx, -.19, -.39, .14, .42, .055, colors.shade);
-    this.fillStrokeCapsule(ctx, .05, -.39, .14, .42, .055, colors.main);
-    this.fillStrokeCapsule(ctx, -.23, -.08, .22, .1, .04, "#263a45");
-    this.fillStrokeCapsule(ctx, .02, -.08, .22, .1, .04, "#263a45");
+    this.drawActorLeg(ctx, -.12, -.39, motion.left * .52, colors.shade);
+    this.drawActorLeg(ctx, .12, -.39, motion.right * .52, colors.main);
 
     roundedPath(ctx, -.3, -.82, .6, .48, .14);
     ctx.fillStyle = colors.main;
@@ -392,6 +409,15 @@ export class Renderer {
     ctx.fillStyle = fill;
     ctx.fill();
     ctx.stroke();
+    ctx.restore();
+  }
+
+  drawActorLeg(ctx, hipX, hipY, swing, color) {
+    ctx.save();
+    ctx.translate(hipX, hipY);
+    ctx.rotate(swing);
+    this.fillStrokeCapsule(ctx, -.07, 0, .14, .41, .055, color);
+    this.fillStrokeCapsule(ctx, -.085, .33, .23, .105, .04, "#263a45", -.08 - swing * .18);
     ctx.restore();
   }
 
@@ -519,55 +545,13 @@ export class Renderer {
   drawWeapon(game) {
     if (!game.player.alive) return;
     if (game.tank.driverId === game.player.id) { this.drawTankCockpit(game); return; }
-    const ctx = this.context;
-    const width = this.width;
-    const height = this.height;
-    const visual = game.currentWeapon?.visual || "rifle";
-    const bob = Math.sin(performance.now() * .007) * height * .004;
-    ctx.save();
-    ctx.translate(0, bob);
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    ctx.strokeStyle = "#14283b";
-    ctx.lineWidth = Math.max(4, height * .008);
-    if (visual === "knife" || visual === "axe") {
-      ctx.fillStyle = "#ffcc8a";
-      roundedPath(ctx, width * .72, height * .78, width * .24, height * .24, height * .06);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = visual === "axe" ? "#78d4dd" : "#dcecf2";
-      ctx.beginPath();
-      if (visual === "axe") {
-        ctx.moveTo(width * .73, height * .67); ctx.lineTo(width * .84, height * .49); ctx.lineTo(width * .92, height * .57); ctx.lineTo(width * .82, height * .71);
-      } else {
-        ctx.moveTo(width * .71, height * .7); ctx.lineTo(width * .91, height * .48); ctx.lineTo(width * .82, height * .75);
-      }
-      ctx.closePath(); ctx.fill(); ctx.stroke();
-    } else {
-      const gunColor = visual === "sniper" ? "#334a55" : visual === "machinegun" ? "#287a87" : visual === "pistol" || visual === "dual" ? "#d8e6e9" : "#8b5136";
-      ctx.fillStyle = "#ffbd7f";
-      ctx.beginPath(); ctx.ellipse(width * .64, height * .88, width * .1, height * .12, -.2, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = gunColor;
-      ctx.beginPath();
-      ctx.moveTo(width * .44, height * .99);
-      ctx.lineTo(width * .55, height * .69);
-      ctx.lineTo(width * .9, height * .57);
-      ctx.lineTo(width * .94, height * .64);
-      ctx.lineTo(width * .66, height * .78);
-      ctx.lineTo(width * .76, height * .99);
-      ctx.closePath(); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = "#182d3a";
-      roundedPath(ctx, width * .68, height * .61, width * .14, height * .07, height * .025); ctx.fill(); ctx.stroke();
-      if (visual === "sniper") {
-        ctx.fillStyle = "#59c5d1";
-        roundedPath(ctx, width * .7, height * .55, width * .18, height * .055, height * .02); ctx.fill(); ctx.stroke();
-      }
-      if (visual === "dual") {
-        ctx.save(); ctx.translate(-width * .28, height * .03); ctx.fillStyle = gunColor;
-        roundedPath(ctx, width * .64, height * .7, width * .24, height * .08, height * .025); ctx.fill(); ctx.stroke(); ctx.restore();
-      }
-    }
-    ctx.restore();
+    this.weaponViewmodel.draw(
+      this.context,
+      game,
+      this.width,
+      this.height,
+      this.motionTracker.get(game.player.id),
+    );
   }
 
   drawTankCockpit(game) {
