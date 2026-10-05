@@ -93,6 +93,56 @@ test("the authoritative standard condition remains 300 wall-clock seconds during
   assert.ok(finished);
 });
 
+test("versioned match state restores kills, ownership references and the absolute deadline", () => {
+  let monotonicNow = 500;
+  let epochNow = 10000;
+  const match = new AuthoritativeMatch(
+    { id: "STATE1", mapId: "wild", modeId: "1v1", conditionId: "blitz" },
+    [{ id: "state-user", alias: "Keeper", loadoutId: "recon" }],
+    () => {},
+    () => {},
+    { now: () => monotonicNow, epochNow: () => epochNow },
+  );
+  const actor = match.actorByUser.get("state-user");
+  actor.kills = 4;
+  actor.deaths = 2;
+  actor.damage = 640;
+  actor.cooldown = 0;
+  match.score.seal = 4;
+  match.throwGrenade(actor);
+  match.setInput("state-user", {
+    movement: { x: 1, y: -1 },
+    angle: .75,
+    fireHeld: true,
+    actions: [["fire"]],
+  });
+
+  const state = match.exportState();
+  assert.doesNotThrow(() => JSON.stringify(state));
+  epochNow += 2500;
+  monotonicNow = 9000;
+  const restored = AuthoritativeMatch.fromState(
+    state,
+    () => {},
+    () => {},
+    { now: () => monotonicNow, epochNow: () => epochNow },
+  );
+  const restoredActor = restored.actorByUser.get("state-user");
+  assert.deepEqual(
+    { kills: restoredActor.kills, deaths: restoredActor.deaths, damage: restoredActor.damage },
+    { kills: 4, deaths: 2, damage: 640 },
+  );
+  assert.equal(restored.score.seal, 4);
+  assert.equal(restored.projectiles[0].owner, restoredActor);
+  assert.ok(Math.abs(restored.time - 177.5) < .001);
+  assert.deepEqual(restored.inputs.get("state-user"), {
+    movement: { x: 1, y: -1 },
+    angle: .75,
+    fireHeld: false,
+    actions: [],
+  });
+});
+
 test("the authoritative kill target comes only from a recognized condition id", () => {
   let finished = null;
   const match = new AuthoritativeMatch(
