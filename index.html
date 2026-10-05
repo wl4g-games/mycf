@@ -7,7 +7,7 @@
     <meta name="description" content="Toon Strike is an original cartoon 3D H5 shooter with solo and online multiplayer, two maps, four loadouts, and battles up to 16v16." data-i18n-content="meta.description" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23ffe15a'/%3E%3Cpath d='M14 20h36v10H38v20H26V30H14z' fill='%23173049'/%3E%3C/svg%3E" />
     <title data-i18n="meta.title">Toon Strike</title>
-    <link rel="stylesheet" href="styles.css?v=20261005-controls-v7" />
+    <link rel="stylesheet" href="styles.css?v=20261005-parental-v8" />
   </head>
   <body>
     <main id="game-shell">
@@ -17,6 +17,9 @@
         <div class="landing-shade"></div>
         <header class="brand"><span class="brand-mark">TS</span><span>TOON // STRIKE</span></header>
         <button type="button" id="language-toggle" class="language-toggle" aria-label="Switch language">Language</button>
+        <button type="button" id="parental-control-button" class="parental-control-button" aria-haspopup="dialog" aria-controls="parental-settings-layer">
+          <b aria-hidden="true">PC</b><span data-i18n="parental.button">PARENT CONTROL</span><small id="parental-button-status">03:00</small>
+        </button>
 
         <div class="landing-copy">
           <p class="eyebrow">CARTOON 3D BROWSER COMBAT · H5</p>
@@ -201,6 +204,50 @@
         </section>
       </div>
 
+      <div id="parental-settings-layer" class="dialog-layer parental-layer is-hidden" role="dialog" aria-modal="true" aria-labelledby="parental-settings-title" aria-describedby="parental-settings-copy">
+        <section class="modal parental-settings-modal">
+          <p data-i18n="parental.settings.kicker">FAMILY SAFETY</p>
+          <h2 id="parental-settings-title" data-i18n="parental.settings.title">PARENT CONTROL</h2>
+          <p id="parental-settings-copy" data-i18n="parental.settings.copy">Choose how much active play time is allowed before a learning checkpoint pauses the game.</p>
+          <label class="parental-toggle">
+            <input id="parental-enabled" type="checkbox" />
+            <span><b data-i18n="parental.settings.enabled">ENABLE COUNTDOWN LOCK</b><small data-i18n="parental.settings.enabledHint">Only active gameplay uses the timer.</small></span>
+          </label>
+          <div class="parental-fields">
+            <label><span data-i18n="parental.settings.duration">PLAY INTERVAL</span><select id="parental-duration">
+              <option value="1" data-i18n="parental.minutes.1">1 MINUTE</option>
+              <option value="3" data-i18n="parental.minutes.3">3 MINUTES</option>
+              <option value="5" data-i18n="parental.minutes.5">5 MINUTES</option>
+              <option value="10" data-i18n="parental.minutes.10">10 MINUTES</option>
+              <option value="20" data-i18n="parental.minutes.20">20 MINUTES</option>
+            </select></label>
+            <label><span data-i18n="parental.settings.questions">CORRECT ANSWERS</span><select id="parental-question-count">
+              <option value="1" data-i18n="parental.questions.1">1 QUESTION</option>
+              <option value="3" data-i18n="parental.questions.3">3 QUESTIONS</option>
+              <option value="5" data-i18n="parental.questions.5">5 QUESTIONS</option>
+              <option value="10" data-i18n="parental.questions.10">10 QUESTIONS</option>
+            </select></label>
+          </div>
+          <p class="parental-local-note" data-i18n="parental.settings.localNote">Settings and countdown progress stay in this browser. Clearing site data can remove this local protection.</p>
+          <div class="modal-actions">
+            <button type="button" id="parental-settings-cancel" class="ghost-button" data-i18n="parental.cancel">CANCEL</button>
+            <button type="button" id="parental-settings-save" class="primary-button"><span data-i18n="parental.save">SAVE CONTROLS</span></button>
+          </div>
+        </section>
+      </div>
+
+      <div id="parental-quiz-layer" class="dialog-layer parental-quiz-layer is-hidden" role="dialog" aria-modal="true" aria-labelledby="parental-quiz-title" aria-describedby="parental-quiz-copy parental-quiz-prompt" tabindex="-1">
+        <section class="parental-quiz-modal">
+          <header><span id="parental-quiz-subject">MATH</span><b id="parental-quiz-progress">0 / 1</b></header>
+          <p data-i18n="parental.quiz.kicker">TACTICAL STUDY CHECKPOINT</p>
+          <h2 id="parental-quiz-title" data-i18n="parental.quiz.title">RECHARGE YOUR FOCUS</h2>
+          <p id="parental-quiz-copy" data-i18n="parental.quiz.copy">Answer the required number of questions correctly to continue playing.</p>
+          <h3 id="parental-quiz-prompt"></h3>
+          <div id="parental-quiz-answers" class="parental-quiz-answers" role="group" aria-labelledby="parental-quiz-prompt"></div>
+          <p id="parental-quiz-feedback" class="parental-quiz-feedback" aria-live="polite"></p>
+        </section>
+      </div>
+
       <section id="alias-modal" class="modal alias-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="alias-title">
         <p data-i18n="alias.kicker">ONLINE ID REGISTRATION</p><h2 id="alias-title" data-i18n="alias.title">ENTER A CALLSIGN</h2>
         <p data-i18n="alias.description">Confirm to connect automatically to the configured multiplayer WebSocket service. Callsigns are unique while online.</p>
@@ -227,6 +274,6 @@
         <button type="button" id="ranking-close" class="primary-button"><span data-i18n="ranking.backToPodium">BACK TO PODIUM</span></button>
       </section>
     </main>
-    <script type="module" src="src/main.js?v=20261005-controls-v7"></script>
+    <script type="module" src="src/main.js?v=20261005-parental-v8"></script>
   </body>
 </html>

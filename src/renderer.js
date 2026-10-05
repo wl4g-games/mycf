@@ -1,11 +1,11 @@
 import {
   CHARACTER_PROFILES, DEFAULT_CHARACTER_ID, FOV, MAPS, SCOPED_FOV, TEAM, THROWABLES,
   clamp, normalizeAngle, resolveCharacterId, tileAt,
-} from "./config.js?v=20261005-controls-v7";
-import { MotionTracker, gaitPose } from "./render-animation.js?v=20261005-controls-v7";
-import { WeaponViewmodel } from "./weapon-viewmodel.js?v=20261005-controls-v7";
-import { cameraHorizon } from "./camera.js?v=20261005-controls-v7";
-import { CombatTracerSystem } from "./combat-tracer.js?v=20261005-controls-v7";
+} from "./config.js?v=20261005-parental-v8";
+import { MotionTracker, gaitPose } from "./render-animation.js?v=20261005-parental-v8";
+import { WeaponViewmodel } from "./weapon-viewmodel.js?v=20261005-parental-v8";
+import { cameraHorizon } from "./camera.js?v=20261005-parental-v8";
+import { CombatTracerSystem } from "./combat-tracer.js?v=20261005-parental-v8";
 
 const TEAM_COLORS = {
   seal: { main: "#2ca9df", shade: "#155d91", light: "#75dcff", gear: "#17394f" },

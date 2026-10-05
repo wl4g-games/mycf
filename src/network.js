@@ -24,14 +24,42 @@ export function resolveWebSocketUrl(locationValue, configuredValue = "") {
 }
 
 export class NetworkClient {
-  constructor() {
+  constructor({ stateRepository } = {}) {
+    if (!stateRepository || typeof stateRepository.load !== "function"
+      || typeof stateRepository.save !== "function" || typeof stateRepository.clear !== "function") {
+      throw new TypeError("NetworkClient requires a synchronous room state repository.");
+    }
     this.socket = null;
     this.handlers = new Map();
-    this.self = null;
-    this.room = null;
-    this.users = [];
-    this.connected = false;
+    this.stateRepository = stateRepository;
+    const state = this.stateRepository.load();
+    this.self = state.self;
+    this.room = state.room;
+    this.users = state.users;
+    this.connected = state.connected;
     this.registerPromise = null;
+  }
+
+  persistState() {
+    const state = this.stateRepository.save({
+      connected: this.connected,
+      self: this.self,
+      users: this.users,
+      room: this.room,
+    });
+    this.connected = state.connected;
+    this.self = state.self;
+    this.users = state.users;
+    this.room = state.room;
+    return state;
+  }
+
+  clearState() {
+    const state = this.stateRepository.clear();
+    this.connected = state.connected;
+    this.self = state.self;
+    this.users = state.users;
+    this.room = state.room;
   }
 
   on(type, handler) {
@@ -45,8 +73,10 @@ export class NetworkClient {
   }
 
   connectAndRegister(alias, loadoutId, characterId) {
-    if (this.connected && this.self) return Promise.resolve(this.self);
+    const socketOpen = this.socket?.readyState === WebSocket.OPEN;
+    if (this.connected && this.self && socketOpen) return Promise.resolve(this.self);
     if (this.registerPromise) return this.registerPromise;
+    if (!socketOpen && (this.connected || this.self || this.room || this.users.length)) this.clearState();
     let url;
     try {
       url = resolveWebSocketUrl(location, window.MYCF_WS_URL || import.meta.env?.VITE_MYCF_WS_URL);
@@ -69,6 +99,7 @@ export class NetworkClient {
       socket.addEventListener("open", () => {
         if (!isCurrent()) return;
         this.connected = true;
+        this.persistState();
         this.emit("status", { connected: true, code: "REGISTERING" });
         this.send("register", { alias, loadoutId, characterId });
       });
@@ -82,11 +113,12 @@ export class NetworkClient {
           settled = true;
           this.registerPromise = null;
           this.self = payload.self;
+          this.persistState();
           resolve(payload.self);
         }
-        if (message.type === "presence") this.users = payload.users || [];
-        if (message.type === "room_state") this.room = payload.room;
-        if (message.type === "room_left") this.room = null;
+        if (message.type === "presence") { this.users = payload.users || []; this.persistState(); }
+        if (message.type === "room_state") { this.room = payload.room; this.persistState(); }
+        if (message.type === "room_left") { this.room = null; this.persistState(); }
         if (message.type === "error" && !this.self) {
           cleanup();
           settled = true;
@@ -100,11 +132,8 @@ export class NetworkClient {
         if (!isCurrent()) return;
         cleanup();
         this.socket = null;
-        this.connected = false;
         this.registerPromise = null;
-        this.self = null;
-        this.room = null;
-        this.users = [];
+        this.clearState();
         if (!settled) {
           settled = true;
           reject(networkError("CONNECTION_CLOSED", "The multiplayer connection closed before registration completed."));
@@ -130,11 +159,24 @@ export class NetworkClient {
     return true;
   }
 
-  updateProfile(loadoutId, characterId) { this.send("update_profile", { loadoutId, characterId }); }
+  updateProfile(loadoutId, characterId) {
+    if (this.self) {
+      this.self = { ...this.self, loadoutId, characterId };
+      this.persistState();
+    }
+    return this.send("update_profile", { loadoutId, characterId });
+  }
   createRoom(settings) { this.send("create_room", settings); }
   invite(targetId) { this.send("invite", { targetId }); }
   respondInvite(roomId, accept) { this.send("respond_invite", { roomId, accept }); }
-  leaveRoom() { this.send("leave_room"); }
+  leaveRoom({ clearProjection = false } = {}) {
+    const sent = this.send("leave_room");
+    if (clearProjection && this.room) {
+      this.room = null;
+      this.persistState();
+    }
+    return sent;
+  }
   startRoom() { this.send("start_room"); }
   sendInput(input) { this.send("match_input", input); }
 }

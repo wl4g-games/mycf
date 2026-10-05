@@ -12,6 +12,7 @@ const REDIS_ENV_KEYS = [
   "MYCF_REDIS_PASSWORD",
   "MYCF_REDIS_DATABASE",
   "MYCF_REDIS_PREFIX",
+  "REDIS_URL",
 ];
 const REDIS_RECONNECT_BASE_DELAY_MS = 100;
 const REDIS_RECONNECT_MAX_DELAY_MS = 2000;
@@ -54,13 +55,13 @@ function parseBoolean(value, name) {
   throw new TypeError(`${name} must be true or false.`);
 }
 
-function parseRedisUrl(rawUrl) {
+function parseRedisUrl(rawUrl, settingName = "MYCF_REDIS_URL") {
   let parsed;
-  try { parsed = new URL(rawUrl); } catch { throw new TypeError("MYCF_REDIS_URL is not a valid URL."); }
+  try { parsed = new URL(rawUrl); } catch { throw new TypeError(`${settingName} is not a valid URL.`); }
   if (parsed.protocol !== "redis:" && parsed.protocol !== "rediss:") {
-    throw new TypeError("MYCF_REDIS_URL must use redis:// or rediss://.");
+    throw new TypeError(`${settingName} must use redis:// or rediss://.`);
   }
-  if (!parsed.hostname) throw new TypeError("MYCF_REDIS_URL must include a host.");
+  if (!parsed.hostname) throw new TypeError(`${settingName} must include a host.`);
   const path = parsed.pathname.replace(/^\//, "");
   const database = path ? parseInteger(path, "Redis URL database", { min: 0 }) : undefined;
   return {
@@ -77,22 +78,26 @@ export function resolveCacheConfig(env = process.env) {
   const hasRedisSettings = REDIS_ENV_KEYS.some(name => optionalSetting(env, name) !== undefined);
   if (!hasRedisSettings) return { backend: "memory" };
 
-  const rawUrl = optionalSetting(env, "MYCF_REDIS_URL");
+  const explicitUrl = optionalSetting(env, "MYCF_REDIS_URL");
+  const marketplaceUrl = optionalSetting(env, "REDIS_URL");
   const configuredHost = optionalSetting(env, "MYCF_REDIS_HOST");
   const configuredPort = optionalSetting(env, "MYCF_REDIS_PORT");
   if (Boolean(configuredHost) !== Boolean(configuredPort)) {
     throw new Error("MYCF_REDIS_HOST and MYCF_REDIS_PORT must be configured together.");
   }
-  if (!rawUrl && !configuredHost) {
-    throw new Error("Redis settings require MYCF_REDIS_URL or MYCF_REDIS_HOST with MYCF_REDIS_PORT.");
+  if (!explicitUrl && !marketplaceUrl && !configuredHost) {
+    throw new Error("Redis settings require MYCF_REDIS_URL, REDIS_URL, or MYCF_REDIS_HOST with MYCF_REDIS_PORT.");
   }
 
-  const urlConfig = rawUrl ? parseRedisUrl(rawUrl) : null;
+  const selectedUrl = explicitUrl || (!configuredHost ? marketplaceUrl : undefined);
+  const urlConfig = selectedUrl
+    ? parseRedisUrl(selectedUrl, explicitUrl ? "MYCF_REDIS_URL" : "REDIS_URL")
+    : null;
   const pairConfig = configuredHost ? {
     host: configuredHost,
     port: parseInteger(configuredPort, "MYCF_REDIS_PORT", { min: 1, max: 65535 }),
   } : null;
-  if (urlConfig && pairConfig
+  if (explicitUrl && urlConfig && pairConfig
     && (urlConfig.host.toLowerCase() !== pairConfig.host.toLowerCase() || urlConfig.port !== pairConfig.port)) {
     throw new Error("MYCF_REDIS_URL and MYCF_REDIS_HOST/MYCF_REDIS_PORT describe different endpoints.");
   }
@@ -104,7 +109,8 @@ export function resolveCacheConfig(env = process.env) {
   }
   const tls = parseBoolean(optionalSetting(env, "MYCF_REDIS_TLS"), "MYCF_REDIS_TLS");
   if (urlConfig && tls !== undefined && tls !== urlConfig.tls) {
-    throw new Error("MYCF_REDIS_TLS conflicts with the MYCF_REDIS_URL protocol.");
+    const settingName = explicitUrl ? "MYCF_REDIS_URL" : "REDIS_URL";
+    throw new Error(`MYCF_REDIS_TLS conflicts with the ${settingName} protocol.`);
   }
   const databaseSetting = optionalSetting(env, "MYCF_REDIS_DATABASE");
   const database = databaseSetting === undefined

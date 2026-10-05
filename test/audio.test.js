@@ -69,7 +69,7 @@ test("grenade callouts distinguish own, friendly, and incoming throws", () => {
   );
 });
 
-test("spatial footsteps alternate feet and retain teammate or enemy identity", () => {
+test("spatial footsteps include the local player and retain teammate or enemy identity", () => {
   const tracker = new SpatialFootstepTracker({ stride: .5, maxVoices: 4 });
   const player = { id: "seal-0", team: "seal", x: 0, y: 0, angle: 0, alive: true };
   const ally = { id: "seal-1", team: "seal", x: 2, y: 1, alive: true };
@@ -77,18 +77,39 @@ test("spatial footsteps alternate feet and retain teammate or enemy identity", (
   const game = { player, actors: [player, ally, enemy], tank: { driverId: null } };
 
   assert.deepEqual(tracker.update(game, .016), []);
+  player.x += .55;
   ally.y += .55;
   enemy.y -= .55;
   const first = tracker.update(game, .1);
-  assert.deepEqual(first.map(cue => cue.relation).sort(), ["ally", "enemy"]);
+  assert.deepEqual(first.map(cue => cue.relation).sort(), ["ally", "enemy", "self"]);
+  assert.equal(first.find(cue => cue.relation === "self").pan, 0);
   assert.ok(first.find(cue => cue.relation === "ally").pan > 0);
   assert.ok(first.find(cue => cue.relation === "enemy").pan < 0);
   assert.ok(first.every(cue => cue.side === "left"));
 
+  player.x += .55;
   ally.y += .55;
   enemy.y -= .55;
   const second = tracker.update(game, .1);
   assert.ok(second.every(cue => cue.side === "right"));
+});
+
+test("footstep playback alternates local feet and preserves world-space stereo direction", () => {
+  const audio = new GameAudio();
+  const calls = [];
+  audio.playPlan = (plan, options) => calls.push({ plan, options });
+
+  audio.footstep({ relation: "self", side: "left", pan: 0, gain: 1, distance: 0 });
+  audio.footstep({ relation: "self", side: "right", pan: 0, gain: 1, distance: 0 });
+  audio.footstep({ relation: "ally", side: "right", pan: -.7, gain: .8, distance: 2 });
+  audio.footstep({ relation: "enemy", side: "left", pan: .7, gain: .8, distance: 2 });
+
+  assert.ok(calls[0].options.pan < -.1);
+  assert.ok(calls[1].options.pan > .1);
+  assert.ok(calls[2].options.pan < 0);
+  assert.ok(calls[3].options.pan > 0);
+  assert.equal(calls[0].plan.id, "footstep:self:left");
+  assert.equal(calls[3].plan.id, "footstep:enemy:left");
 });
 
 test("spatial footsteps exclude every occupied vehicle driver", () => {
@@ -99,12 +120,43 @@ test("spatial footsteps exclude every occupied vehicle driver", () => {
   const game = {
     player,
     actors: [player, tankDriver, armoredDriver],
-    vehicles: [{ driverId: tankDriver.id }, { driverId: armoredDriver.id }],
+    vehicles: [{ driverId: player.id }, { driverId: tankDriver.id }, { driverId: armoredDriver.id }],
   };
 
   tracker.update(game, .016);
+  player.x += .6;
   tankDriver.y += .6;
   armoredDriver.y -= .6;
+  assert.deepEqual(tracker.update(game, .1), []);
+});
+
+test("paused, teleported, and dead actors cannot create phantom footsteps", () => {
+  const tracker = new SpatialFootstepTracker({ stride: .5, teleportDistance: 2 });
+  const player = { id: "seal-0", team: "seal", x: 0, y: 0, angle: 0, alive: true };
+  const enemy = { id: "terror-0", team: "terror", x: 2, y: -1, alive: true };
+  const game = { player, actors: [player, enemy], vehicles: [] };
+
+  tracker.update(game, .016);
+  player.x += .8;
+  enemy.y -= .8;
+  assert.deepEqual(tracker.update(game, 0), []);
+
+  player.x += .2;
+  enemy.y -= .2;
+  assert.deepEqual(tracker.update(game, .1), []);
+
+  player.x += 3;
+  enemy.y -= 3;
+  assert.deepEqual(tracker.update(game, .1), []);
+
+  enemy.alive = false;
+  tracker.update(game, .1);
+  enemy.alive = true;
+  enemy.y += .8;
+  assert.deepEqual(tracker.update(game, .1), []);
+
+  player.alive = false;
+  enemy.y += .8;
   assert.deepEqual(tracker.update(game, .1), []);
 });
 
