@@ -18,12 +18,13 @@ Browser connections from the GitHub Pages origin, the service's own origin, and 
 
 ## Cache and persisted game state
 
-The service uses an `ICache` backend selected at startup. With no Redis endpoint it uses the process-local memory implementation. When both `MYCF_REDIS_HOST` and `MYCF_REDIS_PORT` are present, it connects to that Redis instance before opening the HTTP listener. `MYCF_REDIS_URL` is also supported for managed providers. Partial, invalid, or unreachable Redis configuration fails startup instead of silently falling back to isolated memory state.
+The service uses an `ICache` backend selected at startup. With no Redis endpoint it uses the process-local memory implementation. Explicit `MYCF_REDIS_URL` or `MYCF_REDIS_HOST` plus `MYCF_REDIS_PORT` configuration takes priority; otherwise a Vercel Marketplace `REDIS_URL` is detected automatically. Partial, invalid, or unreachable Redis configuration fails startup instead of silently falling back to isolated memory state.
 
 | Variable | Purpose |
 | --- | --- |
 | `MYCF_REDIS_HOST` / `MYCF_REDIS_PORT` | Enable the Redis backend with an explicit single-instance endpoint; both values are required together |
 | `MYCF_REDIS_URL` | Alternative `redis://` or `rediss://` endpoint |
+| `REDIS_URL` | Vercel Marketplace fallback used only when no explicit `MYCF_` endpoint is configured |
 | `MYCF_REDIS_TLS` | Explicitly enable or disable TLS when host and port are used |
 | `MYCF_REDIS_USERNAME` / `MYCF_REDIS_PASSWORD` | Optional Redis ACL credentials |
 | `MYCF_REDIS_DATABASE` | Optional numeric Redis database |

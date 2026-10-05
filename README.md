@@ -45,8 +45,8 @@ Toon Strike is an original cartoon-style 3D H5 first-person shooter powered by a
   开局前可从两名男性与五名成年女性角色中选择。每张真人角色图都手持低姿待命武器，黑丝袜角色还具有勾丝、梯形脱线与小破洞细节；真人图像只出现在选择页与带呼吸动效的我方击杀前三领奖台，实际作战背包仍可独立选择，正式战斗中的所有角色仍为代码绘制的动画风格。
 - **Multiplayer rooms · 多人房间：** Register a unique callsign, see available online players, create a room, send invitations, accept or decline invitations, and view post-match rankings.<br>
   可注册唯一作战别名、查看可邀请的在线玩家、创建房间、发送邀请、接受或拒绝邀请，并在赛后查看排名。
-- **Spatial battlefield audio · 立体战场音效：** Distinct layered weapon reports include mechanical and recoil-body tails; nearby footsteps pan left or right, while semantic voice cues warn about incoming and outgoing grenades.<br>
-  不同武器的分层声音包含机械作动与后坐尾音；附近脚步会按方向切换左右声道，系统语音则会提示敌方来雷与我方投雷。
+- **Spatial battlefield audio · 立体战场音效：** Distinct layered weapon reports include mechanical and recoil-body tails; the player's alternating steps span both stereo channels, nearby teammate and enemy footsteps pan by screen direction, and semantic voice cues warn about incoming and outgoing grenades.<br>
+  不同武器的分层声音包含机械作动与后坐尾音；玩家自己的左右脚步会在双声道间交替，附近队友和敌人的脚步会按屏幕方向定位，系统语音则会提示敌方来雷与我方投雷。
 - **Combat feedback · 战斗反馈：** Every accepted firearm shot produces a visible trajectory beam, while bow shots use a distinct arrow trail; confirmed incoming hits use a red beam and damage flash. The top HUD shows both teams' total kills/deaths and the local player's kills/deaths.<br>
   每次有效枪械开火都会生成可见弹道光束，弓箭射击则使用独立箭矢轨迹；真正受伤时使用红色光束与受击闪光。屏幕顶部同时展示两队总击杀/阵亡和个人击杀/阵亡。
 - **Classic FPS presentation · 经典第一视角表现：** Every weapon family has its own two-handed viewmodel and movement animation. Firearms add accepted-shot recoil, muzzle flash, and crosshair flame, while bows and melee weapons use dedicated release or swing motion; scoped Barrett aiming hides the viewmodel.<br>
@@ -55,6 +55,8 @@ Toon Strike is an original cartoon-style 3D H5 first-person shooter powered by a
   左手拇指负责移动，右手拇指可在按住开火的同时拖动瞄准，并通过安全的多触点跟踪处理系统中断。
 - **Animated combatants · 动态战斗角色：** Teammates and enemies use movement-derived alternating leg strides instead of sliding across the map.<br>
   队友与敌人会根据实际位移交替迈腿，不再以固定站姿在地图上滑行。
+- **Parent control · 家长控制：** An optional global play timer supports `1 / 3 / 5 / 10 / 20`-minute intervals and learning checkpoints requiring `1 / 3 / 5 / 10` correct answers. Only active, unpaused gameplay consumes time, and countdown progress survives refreshes.<br>
+  可选的全局家长控制支持 `1 / 3 / 5 / 10 / 20` 分钟游戏间隔，以及需答对 `1 / 3 / 5 / 10` 题的学习检查点。只有实际且未暂停的游戏会消耗时间，刷新页面后倒计时进度仍会保留。
 - **Bilingual player UI · 双语玩家界面：** The interface supports English and Simplified Chinese, follows the browser language by default, and remembers manual language changes.<br>
   玩家界面支持英文与简体中文，默认跟随浏览器语言，并会记住手动切换的语言。
 
@@ -88,6 +90,7 @@ All firearms, arrows, grenades, and vehicle rounds have unlimited ammunition; th
 | Pause · 暂停 | `Esc` | Not available · 暂不支持 |
 | Fullscreen · 全屏 | `X` or top-right button · `X` 或右上角按钮 | Top-right button · 右上角按钮 |
 | Force restart or exit · 强制重开或退出 | `R` or top-right button · `R` 或右上角按钮 | Top-right button · 右上角按钮 |
+| Parent control · 家长控制 | Setup-screen button · 部署页按钮 | Setup-screen button · 部署页按钮 |
 
 The Barrett supports an 8× scope, both vehicles can move and fire simultaneously, and the active loadout can be changed during a match while the player is on foot.
 
@@ -96,6 +99,9 @@ The Barrett supports an 8× scope, both vehicles can move and fire simultaneousl
 The fullscreen control disables itself when the browser does not expose element fullscreen, including unsupported iOS browser modes. The force action always asks for confirmation: solo restarts the current configuration, while online play leaves the room and allows an AI replacement to take over.
 
 当浏览器不提供元素全屏能力（包括不支持该能力的 iOS 浏览器模式）时，全屏按钮会自动禁用。强制操作始终需要二次确认：单机版会按当前配置重新开局，网络版则离开房间并由 AI 自动补位。
+
+Parent control is an opt-in, browser-local family aid rather than an account-security boundary. It has no parent PIN in this version, and clearing this site's browser data removes its locally saved settings and countdown.<br>
+家长控制是需要主动启用的浏览器本地家庭辅助功能，并非账户级安全边界。本版本不设家长 PIN；清除此站点的浏览器数据会删除本地保存的设置与倒计时。
 
 ## Online flow · 网络对战流程
 
@@ -123,6 +129,17 @@ Player-facing Chinese text is centralized in `src/locales/zh-CN.js`, while stabl
 Automated tests require the English and Simplified Chinese catalogs to expose identical non-empty keys and matching placeholders. Another source-text guard rejects Chinese characters outside the Simplified Chinese UI catalog and this bilingual README.
 
 自动测试要求英文与简体中文语言目录具有完全一致的非空键和占位符。另一项源码文本守卫会拒绝出现在简体中文 UI 语言文件与本双语 README 之外的中文字符。
+
+## Client repositories · 客户端数据仓库
+
+Browser data access is separated from gameplay and UI code through `IGameSetupRepository`, `IRoomStateRepository`, and `IParentalControlRepository`. The current `LocalGameSetupRepository` and `LocalParentalControlRepository` persist validated snapshots in browser storage, while `LocalRoomStateRepository` deliberately keeps only an in-memory projection of the server-authoritative online room.<br>
+浏览器数据访问通过 `IGameSetupRepository`、`IRoomStateRepository` 与 `IParentalControlRepository` 和游戏逻辑、界面代码分离。当前的 `LocalGameSetupRepository` 与 `LocalParentalControlRepository` 会把经过校验的快照保存在浏览器存储中，而 `LocalRoomStateRepository` 只在内存中保留服务器权威在线房间的投影，避免恢复过期的房主关系或邀请。
+
+The synchronous snapshot contract keeps the render loop deterministic and supports a future `ApiXxxRepository` as a cache-backed adapter: it can hydrate before application startup and replicate asynchronously without making frame updates depend on network latency. Authoritative match simulation and durable server checkpoints remain in the independent WebSocket service rather than browser repositories.<br>
+同步快照契约可保持渲染循环确定性，并为未来的 `ApiXxxRepository` 预留缓存适配方式：它可以在应用启动前完成远端水合，再异步同步数据，而不会让每帧更新依赖网络延迟。服务器权威比赛模拟与持久检查点仍由独立 WebSocket 服务负责，不会放进浏览器仓库。
+
+Normal timer and settings writes can only reduce remaining time or engage the lock within one parental-control cycle. Starting a new cycle uses an expected-cycle check to reject stale quiz completion; explicit reset and browser-data clearing remain administrative escape hatches.<br>
+在同一个家长控制周期内，常规计时与设置写入只能减少剩余时间或触发锁定。开启新周期时会校验预期周期并拒绝过期答题结果；显式重置与清除浏览器数据仍属于管理性退出方式。
 
 ## Run locally · 本地运行
 
@@ -204,8 +221,8 @@ The Preview command deploys only the child Node.js container and creates an endp
 Vercel builds `Dockerfile.vercel` into its own Vercel Container Registry and runs it as a stateless container Function. The release workflow separately builds the same file for GHCR; Vercel does not pull or deploy that GHCR image.<br>
 Vercel 会把 `Dockerfile.vercel` 构建到其自有的 Vercel Container Registry，并作为无状态容器 Function 运行。发布流水线会另行使用同一文件构建 GHCR 镜像；Vercel 不会拉取或部署该 GHCR 镜像。
 
-The WebSocket service now has a pluggable `ICache` layer with memory and Redis implementations. Memory remains the zero-configuration local default; configuring both `MYCF_REDIS_HOST` and `MYCF_REDIS_PORT` selects Redis and fails startup if that configured backend cannot connect. Versioned room and active-match checkpoints preserve score, K/D, damage, actors, vehicles, projectiles, and the absolute deadline, while completed rankings are retained separately. Unexpected disconnects and graceful shutdowns capture a one-hour recovery archive before local membership is changed.<br>
-WebSocket 服务现已提供可替换的 `ICache` 层，并包含 memory 与 Redis 两种实现。memory 仍是零配置的本地默认实现；同时配置 `MYCF_REDIS_HOST` 与 `MYCF_REDIS_PORT` 后会自动选择 Redis，且该后端连接失败时服务将拒绝启动。版本化的房间与进行中比赛检查点会保存比分、击杀/死亡、伤害、角色、载具、投射物及绝对结束时间，完整排名结果则单独保留。发生意外断线或优雅停机时，服务会在修改本地房间成员关系前保存一份保留一小时的恢复归档。
+The WebSocket service now has a pluggable `ICache` layer with memory and Redis implementations. Memory remains the zero-configuration local default. Redis is selected by an explicit `MYCF_REDIS_URL`, an explicit `MYCF_REDIS_HOST` plus `MYCF_REDIS_PORT`, or the Vercel Marketplace `REDIS_URL` fallback, in that priority order; startup fails if the selected backend cannot connect. Versioned room and active-match checkpoints preserve score, K/D, damage, actors, vehicles, projectiles, and the absolute deadline, while completed rankings are retained separately. Unexpected disconnects and graceful shutdowns capture a one-hour recovery archive before local membership is changed.<br>
+WebSocket 服务现已提供可替换的 `ICache` 层，并包含 memory 与 Redis 两种实现。memory 仍是零配置的本地默认实现。系统会按优先级通过显式 `MYCF_REDIS_URL`、显式 `MYCF_REDIS_HOST` 加 `MYCF_REDIS_PORT`，或 Vercel Marketplace 注入的 `REDIS_URL` 选择 Redis；所选后端连接失败时服务会拒绝启动。版本化的房间与进行中比赛检查点会保存比分、击杀/死亡、伤害、角色、载具、投射物及绝对结束时间，完整排名结果则单独保留。发生意外断线或优雅停机时，服务会在修改本地房间成员关系前保存一份保留一小时的恢复归档。
 
 ```bash
 MYCF_REDIS_HOST=redis.internal

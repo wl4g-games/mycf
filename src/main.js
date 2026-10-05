@@ -1,15 +1,20 @@
 import {
   CHARACTER_PROFILES, DEFAULT_CHARACTER_ID, DEFAULT_CONDITION_ID, LOADOUTS, MAPS, MATCH_CONDITIONS,
   MATCH_CONDITION_IDS, TEAM, THROWABLES, VEHICLE_TYPES, WEAPONS, alliedPodium, summarizeActorStats,
-} from "./config.js?v=20261005-controls-v7";
-import { GameAudio } from "./audio.js?v=20261005-controls-v7";
-import { fullscreenElement, supportsFullscreen, toggleFullscreen } from "./fullscreen.js?v=20261005-controls-v7";
-import { GameState } from "./game.js?v=20261005-controls-v7";
-import { applyDocumentTranslations, getLocale, onLocaleChange, t, toggleLocale } from "./i18n.js?v=20261005-controls-v7";
-import { InputController } from "./input.js?v=20261005-controls-v7";
-import { NetworkClient } from "./network.js?v=20261005-controls-v7";
-import { NetworkGameState } from "./network-game.js?v=20261005-controls-v7";
-import { Renderer } from "./renderer.js?v=20261005-controls-v7";
+} from "./config.js?v=20261005-parental-v8";
+import { GameAudio } from "./audio.js?v=20261005-parental-v8";
+import { fullscreenElement, supportsFullscreen, toggleFullscreen } from "./fullscreen.js?v=20261005-parental-v8";
+import { GameState } from "./game.js?v=20261005-parental-v8";
+import { applyDocumentTranslations, getLocale, onLocaleChange, t, toggleLocale } from "./i18n.js?v=20261005-parental-v8";
+import { InputController } from "./input.js?v=20261005-parental-v8";
+import { NetworkClient } from "./network.js?v=20261005-parental-v8";
+import { NetworkGameState } from "./network-game.js?v=20261005-parental-v8";
+import { ParentalControl } from "./parental/index.js?v=20261005-parental-v8";
+import { ParentalControlView } from "./parental/view.js?v=20261005-parental-v8";
+import { Renderer } from "./renderer.js?v=20261005-parental-v8";
+import { LocalGameSetupRepository } from "./repositories/game-setup-repository.js?v=20261005-parental-v8";
+import { LocalParentalControlRepository } from "./repositories/parental-control-repository.js?v=20261005-parental-v8";
+import { LocalRoomStateRepository } from "./repositories/room-state-repository.js?v=20261005-parental-v8";
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => Array.from(document.querySelectorAll(selector));
@@ -31,15 +36,12 @@ const forceConfirmButton = $("#force-confirm");
 const audio = new GameAudio({ translate: t, locale: getLocale });
 const input = new InputController(canvas);
 const renderer = new Renderer(canvas, $("#radar"));
-const network = new NetworkClient();
-const selected = {
-  versionId: null,
-  mapId: "city",
-  modeId: "4v4",
-  loadoutId: "recon",
-  characterId: DEFAULT_CHARACTER_ID,
-  conditionId: DEFAULT_CONDITION_ID,
-};
+const setupRepository = new LocalGameSetupRepository();
+const roomStateRepository = new LocalRoomStateRepository();
+const parentalStateRepository = new LocalParentalControlRepository();
+const network = new NetworkClient({ stateRepository: roomStateRepository });
+const selected = setupRepository.load();
+const parentalControl = new ParentalControl({ stateRepository: parentalStateRepository, localize: t });
 const touchDevice = navigator.maxTouchPoints > 0 || "ontouchstart" in window;
 
 let game;
@@ -53,6 +55,13 @@ let lastMatchResult = null;
 let forcePromptOpen = false;
 let forcePromptWasPaused = false;
 let fullscreenTransition = false;
+let parentalQuizWasPaused = false;
+
+function saveSetup(patch = {}) {
+  const saved = setupRepository.save({ ...selected, ...patch });
+  Object.assign(selected, saved);
+  return saved;
+}
 
 function handleGameEvent(type, payload) {
   if (type === "shot") {
@@ -191,31 +200,40 @@ function selectOption(selector, target) {
   $$(selector).forEach(button => button.classList.toggle("selected", button === target));
 }
 
+function renderSetupPreferences() {
+  selectOption("[data-version]", selected.versionId ? $(`[data-version="${selected.versionId}"]`) : null);
+  selectOption("[data-loadout]", $(`[data-loadout="${selected.loadoutId}"]`));
+  selectOption(".character-option", $(`.character-option[data-character="${selected.characterId}"]`));
+  const selectedVersion = Boolean(selected.versionId);
+  $("#deployment-options").classList.toggle("is-locked", !selectedVersion);
+  $("#deployment-options").setAttribute("aria-disabled", String(!selectedVersion));
+  startButton.disabled = !selectedVersion;
+  $("#alias-input").value = selected.alias || "";
+  syncRoomRuleControls(network.room);
+}
+
 function syncRoomRuleControls(room) {
   const locked = Boolean(room);
   $$('[data-version], [data-map], [data-mode]').forEach(button => { button.disabled = locked; });
   $("#match-condition").disabled = locked;
-  if (!room) return;
+  const rules = room || selected;
 
-  if (MAPS[room.mapId]) {
-    selected.mapId = room.mapId;
-    selectOption("[data-map]", $(`[data-map="${room.mapId}"]`));
-    landing.classList.toggle("map-city", room.mapId === "city");
-    landing.classList.toggle("map-wild", room.mapId === "wild");
-    $("#setup-code").textContent = MAPS[room.mapId].code;
+  if (MAPS[rules.mapId]) {
+    selectOption("[data-map]", $(`[data-map="${rules.mapId}"]`));
+    landing.classList.toggle("map-city", rules.mapId === "city");
+    landing.classList.toggle("map-wild", rules.mapId === "wild");
+    $("#setup-code").textContent = MAPS[rules.mapId].code;
   }
-  if ($(`[data-mode="${room.modeId}"]`)) {
-    selected.modeId = room.modeId;
-    selectOption("[data-mode]", $(`[data-mode="${room.modeId}"]`));
+  if ($(`[data-mode="${rules.modeId}"]`)) {
+    selectOption("[data-mode]", $(`[data-mode="${rules.modeId}"]`));
   }
-  if (MATCH_CONDITIONS[room.conditionId]) {
-    selected.conditionId = room.conditionId;
-    $("#match-condition").value = room.conditionId;
+  if (MATCH_CONDITIONS[rules.conditionId]) {
+    $("#match-condition").value = rules.conditionId;
   }
 }
 
 function setVersion(versionId, button) {
-  selected.versionId = versionId;
+  saveSetup({ versionId });
   selectOption("[data-version]", button);
   $("#deployment-options").classList.remove("is-locked");
   $("#deployment-options").setAttribute("aria-disabled", "false");
@@ -231,7 +249,7 @@ function setVersion(versionId, button) {
 $$('[data-version]').forEach(button => bindTap(button, () => setVersion(button.dataset.version, button)));
 
 $$('[data-map]').forEach(button => bindTap(button, () => {
-  selected.mapId = button.dataset.map;
+  saveSetup({ mapId: button.dataset.map });
   selectOption("[data-map]", button);
   landing.classList.toggle("map-city", selected.mapId === "city");
   landing.classList.toggle("map-wild", selected.mapId === "wild");
@@ -239,13 +257,14 @@ $$('[data-map]').forEach(button => bindTap(button, () => {
 }));
 
 $$('[data-mode]').forEach(button => bindTap(button, () => {
-  selected.modeId = button.dataset.mode;
+  saveSetup({ modeId: button.dataset.mode });
   selectOption("[data-mode]", button);
 }));
 
 function renderConditionOptions() {
   const select = $("#match-condition");
-  const activeId = MATCH_CONDITIONS[selected.conditionId] ? selected.conditionId : DEFAULT_CONDITION_ID;
+  const candidate = network.room?.conditionId || selected.conditionId;
+  const activeId = MATCH_CONDITIONS[candidate] ? candidate : DEFAULT_CONDITION_ID;
   select.replaceChildren();
   MATCH_CONDITION_IDS.forEach(conditionId => {
     const option = document.createElement("option");
@@ -257,25 +276,21 @@ function renderConditionOptions() {
 }
 
 $("#match-condition").addEventListener("change", event => {
-  selected.conditionId = MATCH_CONDITIONS[event.target.value] ? event.target.value : DEFAULT_CONDITION_ID;
+  const conditionId = MATCH_CONDITIONS[event.target.value] ? event.target.value : DEFAULT_CONDITION_ID;
+  saveSetup({ conditionId });
 });
 
 $$('[data-loadout]').forEach(button => bindTap(button, () => {
-  selected.loadoutId = button.dataset.loadout;
+  saveSetup({ loadoutId: button.dataset.loadout });
   selectOption("[data-loadout]", button);
-  if (network.self) {
-    network.self.loadoutId = selected.loadoutId;
-    network.updateProfile(selected.loadoutId, selected.characterId);
-  }
+  if (network.self) network.updateProfile(selected.loadoutId, selected.characterId);
 }));
 
 $$('[data-character]').filter(button => button.classList.contains("character-option")).forEach(button => bindTap(button, () => {
-  selected.characterId = CHARACTER_PROFILES[button.dataset.character] ? button.dataset.character : DEFAULT_CHARACTER_ID;
+  const characterId = CHARACTER_PROFILES[button.dataset.character] ? button.dataset.character : DEFAULT_CHARACTER_ID;
+  saveSetup({ characterId });
   selectOption(".character-option", button);
-  if (network.self) {
-    network.self.characterId = selected.characterId;
-    network.updateProfile(selected.loadoutId, selected.characterId);
-  }
+  if (network.self) network.updateProfile(selected.loadoutId, selected.characterId);
 }));
 
 function showAliasModal() {
@@ -297,6 +312,7 @@ async function registerNetworkIdentity() {
     $("#network-lobby").classList.remove("is-hidden");
     $("#network-alias").textContent = self.alias;
     $("#network-status").textContent = t("lobby.online");
+    saveSetup({ alias: self.alias });
     updateStartButtonLabel();
     renderLobby();
   } catch (connectionError) {
@@ -342,7 +358,8 @@ function enterBattle() {
   podiumModal.classList.add("is-hidden");
   rankingModal.classList.add("is-hidden");
   syncBattleControls();
-  lockPointer();
+  parentalView.ensureBlocking();
+  if (!parentalView.isQuizOpen()) lockPointer();
   audio.unlock();
 }
 
@@ -638,8 +655,7 @@ function confirmForceAction() {
     networkGame.suspendInput();
     networkGame.started = false;
     networkGame.finished = true;
-    network.leaveRoom();
-    network.room = null;
+    network.leaveRoom({ clearProjection: true });
     returnToLobby();
     return;
   }
@@ -650,6 +666,8 @@ function confirmForceAction() {
 }
 
 function resume() {
+  parentalView.ensureBlocking();
+  if (parentalView.isQuizOpen()) return;
   paused = false;
   hideModal();
   lockPointer();
@@ -750,8 +768,27 @@ function updateFeed() {
   });
 }
 
+const parentalView = new ParentalControlView({
+  control: parentalControl,
+  translate: t,
+  onQuizOpen: () => {
+    parentalQuizWasPaused = paused;
+    paused = true;
+    input.resetTransient();
+    if (game === networkGame) networkGame.suspendInput();
+    exitPointerLock();
+  },
+  onQuizClose: () => {
+    if (parentalQuizWasPaused || !game.started || game.finished) return;
+    paused = false;
+    lockPointer();
+    audio.unlock();
+  },
+});
+
 function frame(now) {
-  const dt = Math.min(.05, (now - lastTime) / 1000 || 0);
+  const elapsedSeconds = Math.max(0, (now - lastTime) / 1000 || 0);
+  const dt = Math.min(.05, elapsedSeconds);
   lastTime = now;
   const state = input.consume();
   const forwarded = [];
@@ -761,6 +798,13 @@ function frame(now) {
       exitPointerLock();
     } else forwarded.push(action);
   }
+  const parentalTick = parentalControl.tick(elapsedSeconds, {
+    activeGameplay: game.started && !game.finished && !document.hidden,
+    paused,
+    quizOpen: parentalView.isQuizOpen(),
+  });
+  if (parentalTick.justLocked) parentalView.openQuiz();
+  else if (game.started && !game.finished) parentalView.ensureBlocking();
   if (!paused) game.update(dt, { ...state, items: forwarded });
   if (game.started) audio.updateWorld(game, paused ? 0 : dt);
   renderer.render(game, paused ? 0 : dt);
@@ -778,7 +822,7 @@ bindTap($("#language-toggle"), toggleLocale);
 bindTap($("#alias-confirm"), registerNetworkIdentity);
 bindTap($("#alias-cancel"), () => {
   aliasModal.classList.add("is-hidden");
-  selected.versionId = null;
+  saveSetup({ versionId: null });
   selectOption("[data-version]", null);
   $("#deployment-options").classList.add("is-locked");
   startButton.disabled = true;
@@ -802,6 +846,7 @@ bindTap($("#ranking-close"), backToPodium);
 bindTap($("#match-end-action"), completeMatchEndAction);
 $("#alias-input").addEventListener("keydown", event => { if (event.key === "Enter") registerNetworkIdentity(); });
 window.addEventListener("keydown", event => {
+  if (parentalView.isQuizOpen() || parentalView.isSettingsOpen()) return;
   if (event.code === "Escape" && forcePromptOpen) {
     event.preventDefault();
     input.resetTransient();
@@ -836,6 +881,7 @@ window.addEventListener("keydown", event => {
 });
 document.addEventListener("pointerlockchange", () => {
   if (!game.started || game.finished || touchDevice) return;
+  if (parentalView.isQuizOpen() || parentalView.isSettingsOpen()) return;
   if (forcePromptOpen || fullscreenTransition) return;
   if (document.pointerLockElement !== canvas && modalMode !== "death") {
     pauseBattle();
@@ -849,6 +895,7 @@ window.addEventListener("blur", () => {
 });
 onLocaleChange(() => {
   renderConditionOptions();
+  parentalView.refreshLanguage(t);
   updateStartButtonLabel();
   syncBattleControls();
   if (forcePromptOpen) updateForcePromptCopy();
@@ -859,8 +906,14 @@ onLocaleChange(() => {
     renderRanking(lastMatchResult);
   }
 });
+window.addEventListener("pagehide", () => parentalControl.flush());
+document.addEventListener("visibilitychange", () => {
+  lastTime = performance.now();
+  if (document.hidden) parentalControl.flush();
+});
 applyDocumentTranslations();
 renderConditionOptions();
+renderSetupPreferences();
 updateStartButtonLabel();
 syncBattleControls();
 requestAnimationFrame(frame);

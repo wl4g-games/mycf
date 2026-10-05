@@ -1,4 +1,4 @@
-import { SpatialFootstepTracker, createGrenadeAudioCue, spatialize } from "./audio-spatial.js?v=20261005-controls-v7";
+import { SpatialFootstepTracker, createGrenadeAudioCue, spatialize } from "./audio-spatial.js?v=20261005-parental-v8";
 
 const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
 
@@ -151,14 +151,15 @@ export function createMeleeSoundPlan(weaponId = "swiss", profile = "knife") {
 }
 
 export function createFootstepSoundPlan(relation = "enemy", side = "left") {
+  const self = relation === "self";
   const enemy = relation === "enemy";
   const sidePitch = side === "left" ? -.04 : .04;
   return {
     id: `footstep:${relation}:${side}`,
     layers: [
-      { kind: "noise", role: "impact", duration: .055, volume: enemy ? .052 : .043, highpass: 90, lowpass: enemy ? 1350 : 1750 },
-      { kind: "tone", role: "weight", duration: .075, volume: enemy ? .033 : .026, frequency: (enemy ? 78 : 92) * (1 + sidePitch), sweep: -28, wave: "triangle" },
-      { kind: "noise", role: "gear", duration: .028, volume: enemy ? .018 : .014, highpass: 2400, lowpass: 7200, delay: .018 },
+      { kind: "noise", role: "impact", duration: .055, volume: self ? .058 : enemy ? .052 : .043, highpass: 90, lowpass: enemy ? 1350 : self ? 1650 : 1750 },
+      { kind: "tone", role: "weight", duration: .075, volume: self ? .034 : enemy ? .033 : .026, frequency: (enemy ? 78 : self ? 84 : 92) * (1 + sidePitch), sweep: -28, wave: "triangle" },
+      { kind: "noise", role: "gear", duration: .028, volume: self ? .016 : enemy ? .018 : .014, highpass: 2400, lowpass: 7200, delay: .018 },
     ],
   };
 }
@@ -430,9 +431,12 @@ export class GameAudio {
 
   footstep(cue) {
     const plan = createFootstepSoundPlan(cue.relation, cue.side);
-    const footPan = clamp(cue.pan + (cue.side === "left" ? -.025 : .025), -1, 1);
+    const footSide = cue.side === "left" ? -1 : 1;
+    const footPan = cue.relation === "self"
+      ? footSide * .18
+      : clamp(cue.pan + footSide * .025, -1, 1);
     this.playPlan(plan, {
-      gain: Math.max(.045, cue.gain * .72),
+      gain: cue.relation === "self" ? .9 : Math.max(.045, cue.gain * .72),
       pan: footPan,
       distance: cue.distance,
       maxDistance: 11,

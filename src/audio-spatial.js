@@ -84,7 +84,7 @@ export class SpatialFootstepTracker {
 
   update(game, dt) {
     const listener = game?.player;
-    if (!listener || !Array.isArray(game.actors)) {
+    if (!listener?.alive || !Array.isArray(game.actors)) {
       this.reset();
       return [];
     }
@@ -93,12 +93,12 @@ export class SpatialFootstepTracker {
     const vehicleDrivers = new Set(
       (Array.isArray(game.vehicles) ? game.vehicles : game.tank ? [game.tank] : [])
         .map(vehicle => vehicle?.driverId)
-        .filter(Boolean),
+        .filter(driverId => driverId !== null && driverId !== undefined),
     );
     const active = new Set();
     const cues = [];
     for (const actor of game.actors) {
-      if (!actor || actor.id === listener.id || !actor.alive || vehicleDrivers.has(actor.id)) continue;
+      if (!actor || !actor.alive || vehicleDrivers.has(actor.id)) continue;
       active.add(actor.id);
       let state = this.states.get(actor.id);
       if (!state) {
@@ -123,7 +123,7 @@ export class SpatialFootstepTracker {
       cues.push({
         ...spatial,
         actorId: actor.id,
-        relation: actor.team === listener.team ? "ally" : "enemy",
+        relation: actor.id === listener.id ? "self" : actor.team === listener.team ? "ally" : "enemy",
         side: state.nextSide,
       });
       state.nextSide = state.nextSide === "left" ? "right" : "left";

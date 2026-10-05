@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { NetworkClient, resolveWebSocketUrl } from "../src/network.js";
+import { LocalRoomStateRepository } from "../src/repositories/room-state-repository.js";
 
 const pagesLocation = new URL("https://wl4g-games.github.io/mycf/");
 
@@ -16,6 +17,10 @@ test("static Pages deployments require an explicit multiplayer endpoint", () => 
     resolveWebSocketUrl(pagesLocation, "https://toon-strike.vercel.app"),
     "wss://toon-strike.vercel.app/ws",
   );
+});
+
+test("the network client depends on an injected room-state repository", () => {
+  assert.throws(() => new NetworkClient(), /room state repository/);
 });
 
 test("a failed registration cannot let its stale socket corrupt a retry", async t => {
@@ -76,7 +81,8 @@ test("a failed registration cannot let its stale socket corrupt a retry", async 
     }
   });
 
-  const client = new NetworkClient();
+  const stateRepository = new LocalRoomStateRepository();
+  const client = new NetworkClient({ stateRepository });
   const firstAttempt = client.connectAndRegister("Alpha", "recon", "glamAgentBlack");
   const firstSocket = FakeWebSocket.instances[0];
   firstSocket.open();
@@ -104,4 +110,24 @@ test("a failed registration cannot let its stale socket corrupt a retry", async 
     type: "update_profile",
     payload: { loadoutId: "archer", characterId: "qipaoAgent" },
   });
+  secondSocket.message({ type: "presence", payload: { users: [{ id: "second", alias: "Bravo" }] } });
+  secondSocket.message({ type: "room_state", payload: { room: { id: "ROOM42", members: [] } } });
+  assert.equal(stateRepository.load().room.id, "ROOM42");
+  assert.equal(stateRepository.load().self.characterId, "qipaoAgent");
+  assert.equal(client.leaveRoom({ clearProjection: true }), true);
+  assert.deepEqual(secondSocket.sent.at(-1), { type: "leave_room", payload: {} });
+  assert.equal(stateRepository.load().room, null);
+
+  const instanceCount = FakeWebSocket.instances.length;
+  secondSocket.readyState = FakeWebSocket.CLOSED;
+  const thirdAttempt = client.connectAndRegister("Charlie", "police", "specialForces");
+  assert.equal(FakeWebSocket.instances.length, instanceCount + 1);
+  const thirdSocket = FakeWebSocket.instances.at(-1);
+  secondSocket.dispatch("close");
+  thirdSocket.open();
+  thirdSocket.message({ type: "registered", payload: { self: { id: "third", alias: "Charlie" } } });
+  assert.deepEqual(await thirdAttempt, { id: "third", alias: "Charlie" });
+  thirdSocket.readyState = FakeWebSocket.CLOSED;
+  thirdSocket.dispatch("close");
+  assert.deepEqual(stateRepository.load(), { connected: false, self: null, users: [], room: null });
 });

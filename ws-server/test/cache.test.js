@@ -184,6 +184,25 @@ test("Redis config supports endpoint, TLS, credentials, database, and prefix", (
   assert.equal(fromUrl.clientOptions.username, "user");
   assert.equal(fromUrl.clientOptions.password, "pass");
   assert.equal(fromUrl.clientOptions.database, 4);
+
+  const marketplace = resolveCacheConfig({ REDIS_URL: "rediss://market:secret@market.redis.example:6380/2" });
+  assert.equal(marketplace.clientOptions.socket.host, "market.redis.example");
+  assert.equal(marketplace.clientOptions.socket.tls, true);
+  assert.equal(marketplace.clientOptions.username, "market");
+  assert.equal(marketplace.clientOptions.database, 2);
+  assert.throws(
+    () => resolveCacheConfig({ REDIS_URL: "rediss://market.redis.example:6380", MYCF_REDIS_TLS: "false" }),
+    /REDIS_URL protocol/,
+  );
+
+  const explicitPair = resolveCacheConfig({
+    REDIS_URL: "rediss://market.redis.example:6380",
+    MYCF_REDIS_HOST: "private.redis.internal",
+    MYCF_REDIS_PORT: "6379",
+  });
+  assert.equal(explicitPair.clientOptions.socket.host, "private.redis.internal");
+  assert.equal(explicitPair.clientOptions.socket.port, 6379);
+  assert.equal(explicitPair.clientOptions.socket.tls, false);
 });
 
 test("Redis cache uses namespaced JSON commands, scan, leases, and pub/sub", async () => {
