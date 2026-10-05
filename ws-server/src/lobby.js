@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { DEFAULT_CHARACTER_ID, GAME_MODES, LOADOUTS, MAPS, resolveCharacterId, resolveMatchCondition } from "./game-config.js";
 import { AuthoritativeMatch } from "./match.js";
+import { PersistenceQueue } from "./persistence-queue.js";
 
 const ALIAS_PATTERN = /^[\p{L}\p{N}_\-\s]{2,16}$/u;
 const socketOpen = socket => socket?.readyState === 1;
@@ -10,11 +11,97 @@ function roomCode() {
 }
 
 export class LobbyService {
-  constructor() {
+  constructor({
+    stateStore = null,
+    persistenceIntervalSeconds = 1,
+    persistenceRetryAttempts = 3,
+    persistenceRetryBaseDelayMs = 50,
+    onPersistenceError = () => {},
+  } = {}) {
     this.clients = new Map();
     this.rooms = new Map();
+    this.stateStore = stateStore;
+    this.persistenceIntervalSeconds = persistenceIntervalSeconds;
+    this.persistenceQueue = new PersistenceQueue({
+      retryAttempts: persistenceRetryAttempts,
+      retryBaseDelayMs: persistenceRetryBaseDelayMs,
+      isBackendReady: () => this.stateStore?.cache?.isReady !== false,
+      onError: onPersistenceError,
+    });
+    this.connectionRecoveryKeys = new WeakMap();
     this.lastTick = performance.now();
     this.snapshotAccumulator = 0;
+    this.persistenceAccumulator = 0;
+    this.shuttingDown = false;
+  }
+
+  trackPersistence(key, operation) {
+    this.persistenceQueue.schedule(key, operation);
+  }
+
+  retryFailedPersistence() {
+    if (!this.shuttingDown) this.persistenceQueue.retryFailed();
+  }
+
+  recordPersistenceError(key, error) {
+    this.persistenceQueue.recordError(key, error);
+  }
+
+  get lastPersistenceError() { return this.persistenceQueue.lastError; }
+
+  capturePersistenceDocument(key, createDocument) {
+    try {
+      return createDocument();
+    } catch (error) {
+      this.recordPersistenceError(key, error);
+      return null;
+    }
+  }
+
+  persistRoom(room) {
+    if (!room || !this.stateStore) return;
+    const key = `room:${room.id}`;
+    const document = this.capturePersistenceDocument(
+      key,
+      () => this.stateStore.roomDocument(room, this.clients),
+    );
+    if (document) this.trackPersistence(key, () => this.stateStore.saveRoomDocument(document));
+  }
+
+  archiveRoom(room, reason) {
+    if (!room || !this.stateStore) return;
+    const recoveryId = room.matchId || "waiting";
+    const key = `recovery:${room.id}:${recoveryId}`;
+    const scheduled = this.connectionRecoveryKeys.get(room);
+    const preserveFirstMatchSnapshot = reason === "connection_lost" && Boolean(room.matchId);
+    if (preserveFirstMatchSnapshot && scheduled?.has(recoveryId)) return;
+    const document = this.capturePersistenceDocument(
+      key,
+      () => this.stateStore.recoveryDocument(room, this.clients, reason),
+    );
+    if (!document) return;
+    if (preserveFirstMatchSnapshot) {
+      const recoveryKeys = scheduled || new Set();
+      recoveryKeys.add(recoveryId);
+      if (!scheduled) this.connectionRecoveryKeys.set(room, recoveryKeys);
+    }
+    this.trackPersistence(key, () => this.stateStore.saveRecoveryDocument(document));
+  }
+
+  beginShutdown() {
+    if (this.shuttingDown) return;
+    this.shuttingDown = true;
+    for (const room of this.rooms.values()) this.archiveRoom(room, "server_shutdown");
+  }
+
+  deletePersistedRoom(roomId) {
+    if (roomId && this.stateStore) {
+      this.trackPersistence(`room:${roomId}`, () => this.stateStore.deleteRoom(roomId));
+    }
+  }
+
+  async flushPersistence() {
+    await this.persistenceQueue.flush();
   }
 
   connect(socket, request = {}) {
@@ -39,6 +126,7 @@ export class LobbyService {
   }
 
   receive(client, raw) {
+    if (this.shuttingDown) return;
     const now = Date.now();
     if (now - client.messageWindow > 1000) {
       client.messageWindow = now;
@@ -85,7 +173,10 @@ export class LobbyService {
     if (LOADOUTS[payload.loadoutId]) client.loadoutId = payload.loadoutId;
     client.characterId = resolveCharacterId(payload.characterId || client.characterId);
     const room = this.rooms.get(client.roomId);
-    if (room?.status === "waiting") this.broadcastRoom(room);
+    if (room?.status === "waiting") {
+      this.broadcastRoom(room);
+      this.persistRoom(room);
+    }
   }
 
   createRoom(client, payload) {
@@ -107,12 +198,14 @@ export class LobbyService {
       members: [client.id],
       invited: new Set(),
       match: null,
+      matchId: null,
       createdAt: Date.now(),
     };
     this.rooms.set(id, room);
     client.roomId = id;
     this.broadcastRoom(room);
     this.broadcastPresence();
+    this.persistRoom(room);
   }
 
   invite(client, payload) {
@@ -124,18 +217,24 @@ export class LobbyService {
     room.invited.add(target.id);
     this.send(target, "invite", { room: this.publicRoom(room), from: this.publicUser(client) });
     this.send(client, "notice", { code: "INVITE_SENT", params: { alias: target.alias } });
+    this.persistRoom(room);
   }
 
   respondInvite(client, payload) {
     const room = this.rooms.get(String(payload.roomId || ""));
     if (!room || !room.invited.has(client.id)) return this.error(client, "INVITE_EXPIRED", "This invitation has expired.");
     room.invited.delete(client.id);
-    if (!payload.accept) return this.send(client, "notice", { code: "INVITE_DECLINED" });
+    if (!payload.accept) {
+      this.send(client, "notice", { code: "INVITE_DECLINED" });
+      this.persistRoom(room);
+      return;
+    }
     if (client.roomId || room.status !== "waiting" || room.members.length >= this.maxHumans(room)) return this.error(client, "ROOM_UNAVAILABLE", "This room has started or is full.");
     client.roomId = room.id;
     room.members.push(client.id);
     this.broadcastRoom(room);
     this.broadcastPresence();
+    this.persistRoom(room);
   }
 
   leaveRoom(client) {
@@ -144,10 +243,14 @@ export class LobbyService {
     if (room.match) room.match.removeHuman(client.id);
     room.members = room.members.filter(id => id !== client.id);
     client.roomId = null;
-    if (!room.members.length) this.rooms.delete(room.id);
+    if (!room.members.length) {
+      this.rooms.delete(room.id);
+      this.deletePersistedRoom(room.id);
+    }
     else {
       if (room.ownerId === client.id) room.ownerId = room.members[0];
       this.broadcastRoom(room);
+      this.persistRoom(room);
     }
     this.send(client, "room_left", {});
     this.broadcastPresence();
@@ -159,19 +262,25 @@ export class LobbyService {
     const members = room.members.map(id => this.clients.get(id)).filter(Boolean);
     if (!members.length) return this.error(client, "EMPTY_ROOM", "No online players remain in this room.");
     room.status = "playing";
+    room.matchId = randomUUID();
     room.match = new AuthoritativeMatch(
       room,
       members,
-      event => this.broadcastToRoom(room, "combat_event", event),
+      event => {
+        this.broadcastToRoom(room, "combat_event", event);
+        if (event.type === "kill") this.persistRoom(room);
+      },
       result => this.finishMatch(room, result),
     );
     members.forEach(member => this.send(member, "match_start", {
       room: this.publicRoom(room),
       assignment: room.match.assignmentFor(member.id),
       duration: room.match.rules.timeLimit,
+      endsAt: room.match.endsAt,
     }));
     this.broadcastRoom(room);
     this.broadcastPresence();
+    this.persistRoom(room);
   }
 
   matchInput(client, payload) {
@@ -184,7 +293,13 @@ export class LobbyService {
     const dt = Math.min(.1, Math.max(.001, (now - this.lastTick) / 1000));
     this.lastTick = now;
     this.snapshotAccumulator += dt;
+    this.persistenceAccumulator += dt;
     for (const room of this.rooms.values()) if (room.match) room.match.update(dt);
+    if (this.persistenceAccumulator >= this.persistenceIntervalSeconds) {
+      this.persistenceAccumulator = 0;
+      for (const room of this.rooms.values()) if (room.match) this.persistRoom(room);
+      this.retryFailedPersistence();
+    }
     if (this.snapshotAccumulator < .066) return;
     this.snapshotAccumulator = 0;
     for (const room of this.rooms.values()) {
@@ -198,22 +313,44 @@ export class LobbyService {
 
   finishMatch(room, result) {
     this.broadcastToRoom(room, "match_end", result);
+    if (this.stateStore && room.matchId) {
+      const matchId = room.matchId;
+      const key = `result:${matchId}`;
+      const document = this.capturePersistenceDocument(
+        key,
+        () => this.stateStore.resultDocument(room, result, matchId),
+      );
+      if (document) {
+        this.trackPersistence(key, () => this.stateStore.saveResultDocument(document));
+        this.trackPersistence(
+          `latest-result:${room.id}`,
+          () => this.stateStore.saveLatestResultDocument(document),
+        );
+      }
+    }
     room.match = null;
     room.status = "waiting";
+    room.matchId = null;
     this.broadcastRoom(room);
     this.broadcastPresence();
+    this.persistRoom(room);
   }
 
   disconnect(client) {
     if (!this.clients.has(client.id)) return;
     const room = this.rooms.get(client.roomId);
+    if (room && !this.shuttingDown) this.archiveRoom(room, "connection_lost");
     if (room?.match) room.match.removeHuman(client.id);
     if (room) {
       room.members = room.members.filter(id => id !== client.id);
-      if (!room.members.length) this.rooms.delete(room.id);
+      if (!room.members.length) {
+        this.rooms.delete(room.id);
+        this.deletePersistedRoom(room.id);
+      }
       else {
         if (room.ownerId === client.id) room.ownerId = room.members[0];
         this.broadcastRoom(room);
+        this.persistRoom(room);
       }
     }
     this.clients.delete(client.id);
@@ -245,6 +382,7 @@ export class LobbyService {
       killTarget: room.killTarget,
       timeLimit: room.timeLimit,
       status: room.status,
+      matchId: room.matchId,
       maxHumans: this.maxHumans(room),
       members: room.members.map(id => this.clients.get(id)).filter(Boolean).map(client => this.publicUser(client)),
     };

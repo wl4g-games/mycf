@@ -10,6 +10,7 @@ import {
 } from "./vehicle-system.js";
 
 const TEAMS = [TEAM.SEAL, TEAM.TERROR];
+const MATCH_STATE_VERSION = 1;
 const randomItem = list => list[Math.floor(Math.random() * list.length)];
 
 function publicProjectile(projectile) {
@@ -50,7 +51,10 @@ function publicActor(actor, ownActor) {
 }
 
 export class AuthoritativeMatch {
-  constructor(room, members, emit, finish, { now = () => performance.now() } = {}) {
+  constructor(room, members, emit, finish, {
+    now = () => performance.now(),
+    epochNow = () => Date.now(),
+  } = {}) {
     this.roomId = room.id;
     this.map = MAPS[room.mapId] || MAPS.city;
     this.mode = GAME_MODES[room.modeId] || GAME_MODES["4v4"];
@@ -58,7 +62,9 @@ export class AuthoritativeMatch {
     this.emit = emit;
     this.onFinish = finish;
     this.now = now;
+    this.epochNow = epochNow;
     this.deadline = this.now() + this.rules.timeLimit * 1000;
+    this.endsAt = this.epochNow() + this.rules.timeLimit * 1000;
     this.time = this.rules.timeLimit;
     this.score = { seal: 0, terror: 0 };
     this.actors = [];
@@ -71,6 +77,72 @@ export class AuthoritativeMatch {
     this.vehicles = createVehicleStates(this.map);
     this.syncVehicleAliases();
     this.createActors(members);
+  }
+
+  static fromState(state, emit, finish, {
+    now = () => performance.now(),
+    epochNow = () => Date.now(),
+  } = {}) {
+    if (!state || state.schemaVersion !== MATCH_STATE_VERSION) {
+      throw new Error("Unsupported match state schema.");
+    }
+    const match = Object.create(AuthoritativeMatch.prototype);
+    match.roomId = String(state.roomId || "");
+    match.map = MAPS[state.mapId] || MAPS.city;
+    match.mode = GAME_MODES[state.modeId] || GAME_MODES["4v4"];
+    match.rules = resolveMatchCondition({ conditionId: state.conditionId });
+    match.emit = emit;
+    match.onFinish = finish;
+    match.now = now;
+    match.epochNow = epochNow;
+    match.endsAt = Number.isFinite(state.endsAt) ? state.endsAt : epochNow();
+    const remainingMs = Math.max(0, match.endsAt - epochNow());
+    match.deadline = now() + remainingMs;
+    match.time = remainingMs / 1000;
+    match.score = {
+      seal: Number(state.score?.seal) || 0,
+      terror: Number(state.score?.terror) || 0,
+    };
+    match.actors = Array.isArray(state.actors) ? state.actors.map(actor => ({ ...actor })) : [];
+    const actorById = new Map(match.actors.map(actor => [actor.id, actor]));
+    match.actorByUser = new Map(
+      match.actors.filter(actor => actor.userId).map(actor => [actor.userId, actor]),
+    );
+    match.inputs = new Map(
+      Array.isArray(state.inputs)
+        ? state.inputs
+          .filter(([userId]) => match.actorByUser.has(userId))
+          .map(([userId, input]) => [userId, {
+            movement: {
+              x: clamp(Number(input?.movement?.x) || 0, -1, 1),
+              y: clamp(Number(input?.movement?.y) || 0, -1, 1),
+            },
+            angle: normalizeAngle(Number(input?.angle) || 0),
+            fireHeld: false,
+            actions: [],
+          }])
+        : [],
+    );
+    for (const [userId, actor] of match.actorByUser) {
+      if (!match.inputs.has(userId)) match.inputs.set(userId, match.emptyInput(actor.angle));
+    }
+    match.vehicles = Array.isArray(state.vehicles) && state.vehicles.length
+      ? state.vehicles.map(vehicle => ({ ...vehicle }))
+      : createVehicleStates(match.map);
+    match.syncVehicleAliases();
+    match.projectiles = Array.isArray(state.projectiles)
+      ? state.projectiles.map(projectile => {
+        const { ownerActorId, ...projectileState } = projectile;
+        return {
+          ...projectileState,
+          owner: actorById.get(ownerActorId) || null,
+        };
+      })
+      : [];
+    match.effects = Array.isArray(state.effects) ? state.effects.map(effect => ({ ...effect })) : [];
+    match.feed = Array.isArray(state.feed) ? state.feed.map(entry => ({ ...entry })) : [];
+    match.finished = Boolean(state.finished);
+    return match;
   }
 
   syncVehicleAliases() {
@@ -573,6 +645,34 @@ export class AuthoritativeMatch {
     this.inputs.delete(userId);
   }
 
+  exportState() {
+    return {
+      schemaVersion: MATCH_STATE_VERSION,
+      savedAt: this.epochNow(),
+      roomId: this.roomId,
+      mapId: this.map.id,
+      modeId: this.mode.id,
+      conditionId: this.rules.id,
+      endsAt: this.endsAt,
+      score: { ...this.score },
+      actors: this.actors.map(actor => ({ ...actor })),
+      vehicles: this.vehicles.map(vehicle => ({ ...vehicle })),
+      projectiles: this.projectiles.map(projectile => {
+        const { owner, ...state } = projectile;
+        return { ...state, ownerActorId: owner?.id || null };
+      }),
+      effects: this.effects.map(effect => ({ ...effect })),
+      feed: this.feed.map(entry => ({ ...entry })),
+      inputs: [...this.inputs].map(([userId, input]) => [userId, {
+        movement: { ...input.movement },
+        angle: input.angle,
+        fireHeld: false,
+        actions: [],
+      }]),
+      finished: this.finished,
+    };
+  }
+
   finish(winner) {
     if (this.finished) return;
     this.finished = true;
@@ -587,6 +687,7 @@ export class AuthoritativeMatch {
       conditionId: this.rules.id,
       killTarget: this.rules.killTarget,
       timeLimit: this.rules.timeLimit,
+      endsAt: this.endsAt,
       playerId: ownActor?.id || null,
       time: this.time,
       score: { ...this.score },

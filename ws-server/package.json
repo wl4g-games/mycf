@@ -7,12 +7,13 @@
   "scripts": {
     "start": "node src/standalone.js",
     "test": "node --test test/*.test.js",
-    "check": "node --check scripts/smoke-deployment.mjs && node --check src/access-policy.js && node --check src/game-config.js && node --check src/lobby.js && node --check src/match-results.js && node --check src/match-rules.js && node --check src/match.js && node --check src/runtime.js && node --check src/shot-geometry.js && node --check src/standalone.js && node --check src/vehicle-system.js"
+    "check": "node --check scripts/smoke-deployment.mjs && node --check src/access-policy.js && node --check src/cache/cache-factory.js && node --check src/cache/i-cache.js && node --check src/cache/memory-cache.js && node --check src/cache/redis-cache.js && node --check src/game-config.js && node --check src/game-state-store.js && node --check src/lobby.js && node --check src/match-results.js && node --check src/match-rules.js && node --check src/match.js && node --check src/persistence-queue.js && node --check src/runtime.js && node --check src/shot-geometry.js && node --check src/standalone.js && node --check src/vehicle-system.js"
   },
   "engines": {
     "node": "22.x"
   },
   "dependencies": {
+    "@redis/client": "6.3.0",
     "ws": "8.22.0"
   }
 }

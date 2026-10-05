@@ -31,6 +31,10 @@ The Pages build installs only the root frontend dependencies and uploads only
 `ws-server/Dockerfile.vercel`, and contains no frontend bundle. GHCR and Vercel
 build the same definition independently: GitHub Actions pushes the first image
 to GHCR, while Vercel builds and stores its image in Vercel Container Registry.
+The server test suite uses the in-memory `ICache` backend and an injected fake
+Redis client, so PR and release validation need no Redis service or credential.
+A deployed container selects Redis only when its runtime environment supplies
+the documented Redis endpoint variables.
 The Vercel project has a Root Directory of `ws-server`, uses the `Container`
 framework preset, has Fluid compute enabled, and uses `PORT=8080`. The workflow
 also passes this non-secret port explicitly on every deployment. Disable

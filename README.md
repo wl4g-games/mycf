@@ -204,8 +204,18 @@ The Preview command deploys only the child Node.js container and creates an endp
 Vercel builds `Dockerfile.vercel` into its own Vercel Container Registry and runs it as a stateless container Function. The release workflow separately builds the same file for GHCR; Vercel does not pull or deploy that GHCR image.<br>
 Vercel 会把 `Dockerfile.vercel` 构建到其自有的 Vercel Container Registry，并作为无状态容器 Function 运行。发布流水线会另行使用同一文件构建 GHCR 镜像；Vercel 不会拉取或部署该 GHCR 镜像。
 
-Vercel can place WebSocket clients on different Function instances and can recycle an instance at its duration limit. A public deployment therefore needs durable room and match coordination through Redis plus client reconnection. The current in-memory runtime is suitable only for local single-process development; even a Vercel Preview deployment does not guarantee correct multiplayer routing or recovery.<br>
-Vercel 可能把 WebSocket 客户端分配到不同的 Function 实例，也可能在运行时限到达后回收实例。因此公开部署需要使用 Redis 持久协调房间与比赛状态，并在客户端实现断线重连。当前纯内存运行时仅适合本地单进程开发；即使是 Vercel Preview 部署，也无法保证多人路由与恢复行为正确。
+The WebSocket service now has a pluggable `ICache` layer with memory and Redis implementations. Memory remains the zero-configuration local default; configuring both `MYCF_REDIS_HOST` and `MYCF_REDIS_PORT` selects Redis and fails startup if that configured backend cannot connect. Versioned room and active-match checkpoints preserve score, K/D, damage, actors, vehicles, projectiles, and the absolute deadline, while completed rankings are retained separately. Unexpected disconnects and graceful shutdowns capture a one-hour recovery archive before local membership is changed.<br>
+WebSocket 服务现已提供可替换的 `ICache` 层，并包含 memory 与 Redis 两种实现。memory 仍是零配置的本地默认实现；同时配置 `MYCF_REDIS_HOST` 与 `MYCF_REDIS_PORT` 后会自动选择 Redis，且该后端连接失败时服务将拒绝启动。版本化的房间与进行中比赛检查点会保存比分、击杀/死亡、伤害、角色、载具、投射物及绝对结束时间，完整排名结果则单独保留。发生意外断线或优雅停机时，服务会在修改本地房间成员关系前保存一份保留一小时的恢复归档。
+
+```bash
+MYCF_REDIS_HOST=redis.internal
+MYCF_REDIS_PORT=6379
+MYCF_REDIS_TLS=true
+MYCF_REDIS_PREFIX=mycf:prod:
+```
+
+Vercel can place WebSocket clients on different Function instances and can recycle an instance at its duration limit. The cache layer is therefore a recovery foundation, not the complete recovery path: the current runtime does not yet load recovery archives, and reliable public multiplayer still requires stable resume tokens, browser reconnect, a fenced single match-owner lease, and cross-instance command/event routing. Without those remaining pieces, Redis checkpoints protect state but do not by themselves guarantee correct multiplayer routing or automatic continuation after a recycle.<br>
+Vercel 可能把 WebSocket 客户端分配到不同的 Function 实例，也可能在运行时限到达后回收实例。因此缓存层只是恢复能力的基础，而非完整恢复链路：当前运行时尚不会加载恢复归档，可靠的公开多人模式仍需稳定的恢复令牌、浏览器重连、带 fencing 的单比赛所有者租约，以及跨实例命令/事件路由。在这些能力补齐前，Redis 检查点可以保护状态，但无法单独保证多人路由正确，也不能保证实例回收后自动续局。
 
 The four match presets cap active play at 180, 300, 480, or 720 seconds and may end earlier at their paired kill target. Vercel measures a Function's duration from the initial socket connection, so registration and lobby time consume the same allowance. Fluid compute defaults to 300 seconds; Hobby cannot exceed 300, while paid plans must explicitly allow at least 800 seconds for the longer presets. Reconnection and durable shared state are still required for reliable public matches.<br>
 四种比赛预设的有效作战上限分别为 180、300、480 与 720 秒，并可在达到对应击杀目标时提前结束。Vercel 从首次建立 Socket 时开始计算 Function 时限，因此注册与大厅等待也会占用同一限额。Fluid compute 默认为 300 秒；Hobby 无法超过 300 秒，付费计划需为长时限预设显式配置至少 800 秒。可靠的公开比赛仍需断线恢复与持久化共享状态。

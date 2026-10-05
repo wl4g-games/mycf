@@ -10,6 +10,7 @@ WorkingDirectory=/home/agent/mycf/ws-server
 Environment=NODE_ENV=production
 Environment=MYCF_WS_HOST=127.0.0.1
 Environment=MYCF_WS_PORT=8787
+EnvironmentFile=-/etc/mycf/ws-server.env
 ExecStart=/usr/bin/node /home/agent/mycf/ws-server/src/standalone.js
 Restart=on-failure
 RestartSec=2
