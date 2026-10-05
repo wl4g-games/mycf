@@ -1,26 +1,33 @@
 import {
   CHARACTER_PROFILES, DEFAULT_CHARACTER_ID, DEFAULT_CONDITION_ID, LOADOUTS, MAPS, MATCH_CONDITIONS,
   MATCH_CONDITION_IDS, TEAM, THROWABLES, VEHICLE_TYPES, WEAPONS, alliedPodium, summarizeActorStats,
-} from "./config.js?v=20261005-content-v6";
-import { GameAudio } from "./audio.js?v=20261005-content-v6";
-import { GameState } from "./game.js?v=20261005-content-v6";
-import { applyDocumentTranslations, getLocale, onLocaleChange, t, toggleLocale } from "./i18n.js?v=20261005-content-v6";
-import { InputController } from "./input.js?v=20261005-content-v6";
-import { NetworkClient } from "./network.js?v=20261005-content-v6";
-import { NetworkGameState } from "./network-game.js?v=20261005-content-v6";
-import { Renderer } from "./renderer.js?v=20261005-content-v6";
+} from "./config.js?v=20261005-controls-v7";
+import { GameAudio } from "./audio.js?v=20261005-controls-v7";
+import { fullscreenElement, supportsFullscreen, toggleFullscreen } from "./fullscreen.js?v=20261005-controls-v7";
+import { GameState } from "./game.js?v=20261005-controls-v7";
+import { applyDocumentTranslations, getLocale, onLocaleChange, t, toggleLocale } from "./i18n.js?v=20261005-controls-v7";
+import { InputController } from "./input.js?v=20261005-controls-v7";
+import { NetworkClient } from "./network.js?v=20261005-controls-v7";
+import { NetworkGameState } from "./network-game.js?v=20261005-controls-v7";
+import { Renderer } from "./renderer.js?v=20261005-controls-v7";
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => Array.from(document.querySelectorAll(selector));
+const gameShell = $("#game-shell");
 const canvas = $("#game");
 const hud = $("#hud");
 const landing = $("#landing");
 const modal = $("#modal");
+const forceModal = $("#force-modal");
 const aliasModal = $("#alias-modal");
 const podiumModal = $("#podium-modal");
 const rankingModal = $("#ranking-modal");
 const startButton = $("#start-button");
 const resumeButton = $("#resume-button");
+const fullscreenButton = $("#fullscreen-button");
+const forceButton = $("#force-button");
+const forceCancelButton = $("#force-cancel");
+const forceConfirmButton = $("#force-confirm");
 const audio = new GameAudio({ translate: t, locale: getLocale });
 const input = new InputController(canvas);
 const renderer = new Renderer(canvas, $("#radar"));
@@ -43,6 +50,9 @@ let announcementTimer = 0;
 let lastTime = performance.now();
 let pendingInvite = null;
 let lastMatchResult = null;
+let forcePromptOpen = false;
+let forcePromptWasPaused = false;
+let fullscreenTransition = false;
 
 function handleGameEvent(type, payload) {
   if (type === "shot") {
@@ -126,6 +136,40 @@ function lockPointer() {
 function exitPointerLock() {
   if (typeof document.exitPointerLock !== "function") return;
   try { document.exitPointerLock(); } catch (error) {}
+}
+
+function isNetworkBattle() {
+  return selected.versionId === "network" && game === networkGame;
+}
+
+function syncBattleControls() {
+  const active = Boolean(fullscreenElement(document));
+  const supported = supportsFullscreen(document, gameShell);
+  const fullscreenKey = !supported
+    ? "controls.fullscreenUnavailable"
+    : active ? "controls.exitFullscreen" : "controls.fullscreen";
+  const forceKey = isNetworkBattle() ? "controls.forceExit" : "controls.forceRestart";
+  fullscreenButton.disabled = !supported;
+  fullscreenButton.setAttribute("aria-pressed", String(active));
+  fullscreenButton.setAttribute("aria-label", t(fullscreenKey));
+  fullscreenButton.setAttribute("title", t(fullscreenKey));
+  fullscreenButton.querySelector("span").textContent = t(fullscreenKey);
+  forceButton.setAttribute("aria-label", t(forceKey));
+  forceButton.setAttribute("title", t(forceKey));
+  forceButton.querySelector("span").textContent = t(forceKey);
+}
+
+async function handleFullscreenToggle() {
+  if (fullscreenTransition || fullscreenButton.disabled) return;
+  fullscreenTransition = true;
+  input.resetTransient();
+  const shouldRelock = !paused && game.started && !game.finished && !touchDevice;
+  await toggleFullscreen(document, gameShell);
+  syncBattleControls();
+  window.requestAnimationFrame(() => {
+    fullscreenTransition = false;
+    if (shouldRelock && !paused && game.started && !game.finished) lockPointer();
+  });
 }
 
 function bindTap(element, handler) {
@@ -289,6 +333,7 @@ function enterBattle() {
   paused = false;
   modalMode = "pause";
   lastMatchResult = null;
+  hideForcePrompt();
   audio.resetWorld();
   renderer.resetCombatEffects();
   landing.classList.add("is-hidden");
@@ -296,6 +341,7 @@ function enterBattle() {
   hideModal();
   podiumModal.classList.add("is-hidden");
   rankingModal.classList.add("is-hidden");
+  syncBattleControls();
   lockPointer();
   audio.unlock();
 }
@@ -312,10 +358,13 @@ function pauseBattle() {
 function returnToLobby() {
   paused = false;
   lastMatchResult = null;
+  hideForcePrompt();
+  hideModal();
   podiumModal.classList.add("is-hidden");
   rankingModal.classList.add("is-hidden");
   hud.classList.add("is-hidden");
   landing.classList.remove("is-hidden");
+  exitPointerLock();
   $("#network-lobby").classList.remove("is-hidden");
   renderLobby();
 }
@@ -452,6 +501,7 @@ function showMatchEnd(result) {
   game.finished = true;
   paused = true;
   input.resetTransient();
+  hideForcePrompt();
   hideModal();
   exitPointerLock();
   renderPodium(result);
@@ -525,9 +575,9 @@ network.on("match_start", payload => {
   enterBattle();
   announce(t("announce.networkStart", { map: mapName(game.map), mode: game.mode.label }));
 });
-network.on("snapshot", payload => { if (networkGame) networkGame.applySnapshot(payload); });
-network.on("combat_event", payload => { if (networkGame) networkGame.handleCombatEvent(payload); });
-network.on("match_end", showMatchEnd);
+network.on("snapshot", payload => { if (networkGame?.started) networkGame.applySnapshot(payload); });
+network.on("combat_event", payload => { if (networkGame?.started) networkGame.handleCombatEvent(payload); });
+network.on("match_end", payload => { if (networkGame?.started) showMatchEnd(payload); });
 
 function showModal(title, copy, kicker = t("modal.paused.kicker"), showButton = true, buttonText = t("modal.continue")) {
   $("#modal-title").textContent = title;
@@ -539,6 +589,65 @@ function showModal(title, copy, kicker = t("modal.paused.kicker"), showButton = 
 }
 
 function hideModal() { modal.classList.add("is-hidden"); }
+
+function hideForcePrompt() {
+  forcePromptOpen = false;
+  forceModal.classList.add("is-hidden");
+  forceButton.disabled = false;
+  forceCancelButton.disabled = false;
+  forceConfirmButton.disabled = false;
+}
+
+function updateForcePromptCopy() {
+  const networkBattle = isNetworkBattle();
+  $("#force-title").textContent = t(networkBattle ? "modal.forceExit.title" : "modal.forceRestart.title");
+  $("#force-copy").textContent = t(networkBattle ? "modal.forceExit.copy" : "modal.forceRestart.copy");
+  forceConfirmButton.querySelector("span").textContent = t(networkBattle ? "modal.forceExit.confirm" : "modal.forceRestart.confirm");
+}
+
+function showForcePrompt() {
+  if (!game.started || game.finished || forcePromptOpen) return;
+  forcePromptWasPaused = paused;
+  forcePromptOpen = true;
+  paused = true;
+  input.resetTransient();
+  if (isNetworkBattle()) networkGame.suspendInput();
+  updateForcePromptCopy();
+  forceButton.disabled = true;
+  forceModal.classList.remove("is-hidden");
+  exitPointerLock();
+  window.setTimeout(() => { if (forcePromptOpen) forceCancelButton.focus(); }, 0);
+}
+
+function cancelForcePrompt() {
+  if (!forcePromptOpen) return;
+  const resumeBattle = !forcePromptWasPaused && game.started && !game.finished;
+  hideForcePrompt();
+  forceButton.focus({ preventScroll: true });
+  if (!resumeBattle) return;
+  paused = false;
+  lockPointer();
+  audio.unlock();
+}
+
+function confirmForceAction() {
+  if (!forcePromptOpen) return;
+  forceCancelButton.disabled = true;
+  forceConfirmButton.disabled = true;
+  if (isNetworkBattle()) {
+    networkGame.suspendInput();
+    networkGame.started = false;
+    networkGame.finished = true;
+    network.leaveRoom();
+    network.room = null;
+    returnToLobby();
+    return;
+  }
+  game.reset();
+  game.start();
+  enterBattle();
+  announce(t("announce.newRound", { map: mapName(game.map) }));
+}
 
 function resume() {
   paused = false;
@@ -661,6 +770,10 @@ function frame(now) {
 
 bindTap(startButton, begin);
 bindTap(resumeButton, resume);
+bindTap(fullscreenButton, handleFullscreenToggle);
+bindTap(forceButton, showForcePrompt);
+bindTap(forceCancelButton, cancelForcePrompt);
+bindTap(forceConfirmButton, confirmForceAction);
 bindTap($("#language-toggle"), toggleLocale);
 bindTap($("#alias-confirm"), registerNetworkIdentity);
 bindTap($("#alias-cancel"), () => {
@@ -689,16 +802,47 @@ bindTap($("#ranking-close"), backToPodium);
 bindTap($("#match-end-action"), completeMatchEndAction);
 $("#alias-input").addEventListener("keydown", event => { if (event.key === "Enter") registerNetworkIdentity(); });
 window.addEventListener("keydown", event => {
+  if (event.code === "Escape" && forcePromptOpen) {
+    event.preventDefault();
+    input.resetTransient();
+    cancelForcePrompt();
+    return;
+  }
+  if (forcePromptOpen && event.code === "Tab") {
+    const controls = [forceCancelButton, forceConfirmButton];
+    const current = controls.indexOf(document.activeElement);
+    const direction = event.shiftKey ? -1 : 1;
+    controls[(current + direction + controls.length) % controls.length].focus();
+    event.preventDefault();
+    return;
+  }
+  if (forcePromptOpen) return;
+  const unmodifiedKey = !event.ctrlKey && !event.metaKey && !event.altKey;
+  const battleShortcut = unmodifiedKey && game.started && !game.finished && aliasModal.classList.contains("is-hidden");
+  if (battleShortcut && !event.repeat && event.code === "KeyX") {
+    event.preventDefault();
+    handleFullscreenToggle();
+    return;
+  }
+  if (battleShortcut && !event.repeat && event.code === "KeyR") {
+    event.preventDefault();
+    showForcePrompt();
+    return;
+  }
   if (event.code !== "Enter" || !aliasModal.classList.contains("is-hidden")) return;
+  if (forcePromptOpen) return;
   if (!game.started) begin();
   else if (!modal.classList.contains("is-hidden") && modalMode !== "death") resume();
 });
 document.addEventListener("pointerlockchange", () => {
   if (!game.started || game.finished || touchDevice) return;
+  if (forcePromptOpen || fullscreenTransition) return;
   if (document.pointerLockElement !== canvas && modalMode !== "death") {
     pauseBattle();
   }
 });
+["fullscreenchange", "webkitfullscreenchange", "mozfullscreenchange", "MSFullscreenChange"]
+  .forEach(type => document.addEventListener(type, syncBattleControls));
 window.addEventListener("blur", () => {
   input.resetTransient();
   if (game === networkGame) networkGame.suspendInput();
@@ -706,6 +850,8 @@ window.addEventListener("blur", () => {
 onLocaleChange(() => {
   renderConditionOptions();
   updateStartButtonLabel();
+  syncBattleControls();
+  if (forcePromptOpen) updateForcePromptCopy();
   renderPendingInvite();
   if (network.self) renderLobby();
   if (lastMatchResult) {
@@ -716,4 +862,5 @@ onLocaleChange(() => {
 applyDocumentTranslations();
 renderConditionOptions();
 updateStartButtonLabel();
+syncBattleControls();
 requestAnimationFrame(frame);

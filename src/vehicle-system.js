@@ -1,1 +1,1 @@
-export * from "../ws-server/src/vehicle-system.js?v=20261005-content-v6";
+export * from "../ws-server/src/vehicle-system.js?v=20261005-controls-v7";
