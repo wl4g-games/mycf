@@ -1,4 +1,4 @@
-import { SpatialFootstepTracker, createGrenadeAudioCue, spatialize } from "./audio-spatial.js?v=20261005-content-v6";
+import { SpatialFootstepTracker, createGrenadeAudioCue, spatialize } from "./audio-spatial.js?v=20261005-controls-v7";
 
 const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
 

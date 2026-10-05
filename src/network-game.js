@@ -1,12 +1,12 @@
 import {
   DEFAULT_CHARACTER_ID, GAME_MODES, LOADOUTS, MAPS, MATCH_TIME, TEAM, THROWABLES, WEAPONS,
   distance, isSolid, normalizeAngle, resolveCharacterId, resolveMatchCondition, spawnCells,
-} from "./config.js?v=20261005-content-v6";
-import { applyCameraPitch } from "./camera.js?v=20261005-content-v6";
+} from "./config.js?v=20261005-controls-v7";
+import { applyCameraPitch } from "./camera.js?v=20261005-controls-v7";
 import {
   ACTOR_COLLISION_RADIUS, collidesWithVehicle, createVehicleStates, drivenVehicle,
   resolveInteractionVehicle,
-} from "./vehicle-system.js?v=20261005-content-v6";
+} from "./vehicle-system.js?v=20261005-controls-v7";
 
 export class NetworkGameState {
   constructor(client, audio, emit = () => {}) {

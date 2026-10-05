@@ -41,8 +41,8 @@ Toon Strike is an original cartoon-style 3D H5 first-person shooter powered by a
   可驾驶 M-77 坦克或速度更快的 A-12 装甲车，独立控制炮塔，并在移动中开火。
 - **Selectable match conditions · 可选胜利条件：** Choose `10 kills / 3 minutes`, `20 / 5`, `30 / 8`, or `50 / 12`; reaching the kill target or exhausting the paired timer ends the match.<br>
   可选择 `10 击杀 / 3 分钟`、`20 / 5`、`30 / 8` 或 `50 / 12`；达到击杀目标或用完对应时限都会结束比赛。
-- **Character selection and podium · 角色选择与领奖台：** Choose from two male and five adult female profiles before play. Photoreal portraits appear only in setup and on the breathing podium for the three allied players with the most kills; every live combatant remains a code-drawn cartoon character.<br>
-  开局前可从两名男性与五名成年女性角色中选择。真人图像只出现在选择页与带呼吸动效的我方击杀前三领奖台；正式战斗中的所有角色仍为代码绘制的动画风格。
+- **Character selection and podium · 角色选择与领奖台：** Choose from two male and five adult female profiles before play. Each photoreal portrait carries an illustrative low-ready weapon, while the black-stocking variants show laddered runs and small fabric tears. Portraits appear only in setup and on the breathing podium for the three allied players with the most kills; actual loadouts remain independently selectable, and every live combatant remains a code-drawn cartoon character.<br>
+  开局前可从两名男性与五名成年女性角色中选择。每张真人角色图都手持低姿待命武器，黑丝袜角色还具有勾丝、梯形脱线与小破洞细节；真人图像只出现在选择页与带呼吸动效的我方击杀前三领奖台，实际作战背包仍可独立选择，正式战斗中的所有角色仍为代码绘制的动画风格。
 - **Multiplayer rooms · 多人房间：** Register a unique callsign, see available online players, create a room, send invitations, accept or decline invitations, and view post-match rankings.<br>
   可注册唯一作战别名、查看可邀请的在线玩家、创建房间、发送邀请、接受或拒绝邀请，并在赛后查看排名。
 - **Spatial battlefield audio · 立体战场音效：** Distinct layered weapon reports include mechanical and recoil-body tails; nearby footsteps pan left or right, while semantic voice cues warn about incoming and outgoing grenades.<br>
@@ -86,10 +86,16 @@ All firearms, arrows, grenades, and vehicle rounds have unlimited ammunition; th
 | Switch loadout · 切换背包 | `B` | Loadout button · 背包按钮 |
 | Enter or leave vehicle · 进入或离开载具 | `F` | `F` button · `F` 按钮 |
 | Pause · 暂停 | `Esc` | Not available · 暂不支持 |
+| Fullscreen · 全屏 | `X` or top-right button · `X` 或右上角按钮 | Top-right button · 右上角按钮 |
+| Force restart or exit · 强制重开或退出 | `R` or top-right button · `R` 或右上角按钮 | Top-right button · 右上角按钮 |
 
 The Barrett supports an 8× scope, both vehicles can move and fire simultaneously, and the active loadout can be changed during a match while the player is on foot.
 
 巴雷特支持 8 倍瞄准镜，两种载具都能够边移动边开火，并且玩家步行作战时可在比赛中切换当前作战背包。
+
+The fullscreen control disables itself when the browser does not expose element fullscreen, including unsupported iOS browser modes. The force action always asks for confirmation: solo restarts the current configuration, while online play leaves the room and allows an AI replacement to take over.
+
+当浏览器不提供元素全屏能力（包括不支持该能力的 iOS 浏览器模式）时，全屏按钮会自动禁用。强制操作始终需要二次确认：单机版会按当前配置重新开局，网络版则离开房间并由 AI 自动补位。
 
 ## Online flow · 网络对战流程
 

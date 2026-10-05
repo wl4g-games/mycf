@@ -7,7 +7,7 @@
     <meta name="description" content="Toon Strike is an original cartoon 3D H5 shooter with solo and online multiplayer, two maps, four loadouts, and battles up to 16v16." data-i18n-content="meta.description" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23ffe15a'/%3E%3Cpath d='M14 20h36v10H38v20H26V30H14z' fill='%23173049'/%3E%3C/svg%3E" />
     <title data-i18n="meta.title">Toon Strike</title>
-    <link rel="stylesheet" href="styles.css?v=20261005-content-v6" />
+    <link rel="stylesheet" href="styles.css?v=20261005-controls-v7" />
   </head>
   <body>
     <main id="game-shell">
@@ -76,9 +76,9 @@
               <p><b>05</b> <span data-i18n="setup.character.prompt">Choose character</span></p>
               <div class="character-options">
                 <button type="button" class="character-option selected" data-character="maleAgent"><i class="operator" data-character="maleAgent"></i><span><strong data-i18n="character.maleAgent.name">FIELD AGENT</strong><small data-i18n="character.maleAgent.description">ADULT MALE · PROFESSIONAL FIELD OPERATIVE</small></span></button>
-                <button type="button" class="character-option" data-character="glamSoldierBlack"><i class="operator" data-character="glamSoldierBlack"></i><span><strong data-i18n="character.glamSoldierBlack.name">GLAM SOLDIER · BLACK</strong><small data-i18n="character.glamSoldierBlack.description">ADULT FEMALE · PROFESSIONAL BLACK-STOCKING COMBAT KIT</small></span></button>
+                <button type="button" class="character-option" data-character="glamSoldierBlack"><i class="operator" data-character="glamSoldierBlack"></i><span><strong data-i18n="character.glamSoldierBlack.name">GLAM SOLDIER · BLACK</strong><small data-i18n="character.glamSoldierBlack.description">ADULT FEMALE · DISTRESSED BLACK-STOCKING COMBAT KIT</small></span></button>
                 <button type="button" class="character-option" data-character="qipaoSoldier"><i class="operator" data-character="qipaoSoldier"></i><span><strong data-i18n="character.qipaoSoldier.name">QIPAO SOLDIER</strong><small data-i18n="character.qipaoSoldier.description">ADULT FEMALE · RED FLORAL QIPAO · TACTICAL BOOTS</small></span></button>
-                <button type="button" class="character-option" data-character="glamAgentBlack"><i class="operator" data-character="glamAgentBlack"></i><span><strong data-i18n="character.glamAgentBlack.name">GLAM AGENT · BLACK</strong><small data-i18n="character.glamAgentBlack.description">ADULT FEMALE · PROFESSIONAL AGENT · GLASSES · BLACK STOCKINGS · HEELS</small></span></button>
+                <button type="button" class="character-option" data-character="glamAgentBlack"><i class="operator" data-character="glamAgentBlack"></i><span><strong data-i18n="character.glamAgentBlack.name">GLAM AGENT · BLACK</strong><small data-i18n="character.glamAgentBlack.description">ADULT FEMALE · AGENT · GLASSES · DISTRESSED BLACK STOCKINGS · HEELS</small></span></button>
                 <button type="button" class="character-option" data-character="qipaoAgent"><i class="operator" data-character="qipaoAgent"></i><span><strong data-i18n="character.qipaoAgent.name">QIPAO AGENT</strong><small data-i18n="character.qipaoAgent.description">ADULT FEMALE · RED FLORAL QIPAO · GLASSES · HEELS</small></span></button>
                 <button type="button" class="character-option" data-character="cuteSoldier"><i class="operator" data-character="cuteSoldier"></i><span><strong data-i18n="character.cuteSoldier.name">CUTE SOLDIER</strong><small data-i18n="character.cuteSoldier.description">ADULT FEMALE · PROFESSIONAL CHEERFUL TROOPER</small></span></button>
                 <button type="button" class="character-option" data-character="specialForces"><i class="operator" data-character="specialForces"></i><span><strong data-i18n="character.specialForces.name">SPECIAL FORCES</strong><small data-i18n="character.specialForces.description">ADULT MALE · PROFESSIONAL SPECIAL-FORCES OPERATOR</small></span></button>
@@ -135,6 +135,15 @@
           </div>
         </div>
 
+        <div class="battle-controls" role="group" aria-live="off" data-i18n-aria-label="controls.battle">
+          <button type="button" id="fullscreen-button" class="battle-control" aria-pressed="false" aria-label="Fullscreen" title="Fullscreen">
+            <b aria-hidden="true">⛶</b><span>FULLSCREEN</span>
+          </button>
+          <button type="button" id="force-button" class="battle-control force-control" aria-label="Force restart" title="Force restart">
+            <b aria-hidden="true">↻</b><span>FORCE RESTART</span>
+          </button>
+        </div>
+
         <div class="status-panel">
           <p id="location">BUBBLE HARBOR · SOUTH OVERPASS</p>
           <div class="health-line"><span data-i18n="hud.health">HEALTH</span><b id="health">100</b></div>
@@ -180,6 +189,18 @@
         <button type="button" id="resume-button" class="primary-button"><span data-i18n="modal.continue">CONTINUE</span><kbd>ENTER</kbd></button>
       </section>
 
+      <div id="force-modal" class="dialog-layer is-hidden" role="dialog" aria-modal="true" aria-labelledby="force-title" aria-describedby="force-copy">
+        <section class="modal force-modal">
+          <p data-i18n="modal.force.kicker">MATCH CONTROL</p>
+          <h2 id="force-title" data-i18n="modal.forceRestart.title">RESTART THIS MATCH?</h2>
+          <p id="force-copy" data-i18n="modal.forceRestart.copy">Current progress will be discarded and a fresh match will start immediately.</p>
+          <div class="modal-actions">
+            <button type="button" id="force-cancel" class="ghost-button" data-i18n="modal.force.cancel">CANCEL</button>
+            <button type="button" id="force-confirm" class="primary-button danger-button"><span data-i18n="modal.forceRestart.confirm">RESTART MATCH</span></button>
+          </div>
+        </section>
+      </div>
+
       <section id="alias-modal" class="modal alias-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="alias-title">
         <p data-i18n="alias.kicker">ONLINE ID REGISTRATION</p><h2 id="alias-title" data-i18n="alias.title">ENTER A CALLSIGN</h2>
         <p data-i18n="alias.description">Confirm to connect automatically to the configured multiplayer WebSocket service. Callsigns are unique while online.</p>
@@ -206,6 +227,6 @@
         <button type="button" id="ranking-close" class="primary-button"><span data-i18n="ranking.backToPodium">BACK TO PODIUM</span></button>
       </section>
     </main>
-    <script type="module" src="src/main.js?v=20261005-content-v6"></script>
+    <script type="module" src="src/main.js?v=20261005-controls-v7"></script>
   </body>
 </html>
