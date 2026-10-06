@@ -1,12 +1,12 @@
 import {
   DEFAULT_CHARACTER_ID, GAME_MODES, LOADOUTS, MAPS, MATCH_TIME, TEAM, THROWABLES, WEAPONS,
   distance, isSolid, normalizeAngle, resolveCharacterId, resolveMatchCondition, spawnCells,
-} from "./config.js?v=20261006-grenade-v9";
-import { applyCameraPitch } from "./camera.js?v=20261006-grenade-v9";
+} from "./config.js?v=20261006-lan-v10";
+import { applyCameraPitch } from "./camera.js?v=20261006-lan-v10";
 import {
   ACTOR_COLLISION_RADIUS, collidesWithVehicle, createVehicleStates, drivenVehicle,
   resolveInteractionVehicle,
-} from "./vehicle-system.js?v=20261006-grenade-v9";
+} from "./vehicle-system.js?v=20261006-lan-v10";
 
 export class NetworkGameState {
   constructor(client, audio, emit = () => {}) {
@@ -27,6 +27,8 @@ export class NetworkGameState {
     this.projectiles = [];
     this.effects = [];
     this.score = { seal: 0, terror: 0 };
+    this.actorInterpolationTargets = new Map();
+    this.vehicleInterpolationTargets = new Map();
   }
 
   start(payload) {
@@ -80,6 +82,8 @@ export class NetworkGameState {
   applySnapshot(snapshot) {
     const previousHealth = this.player?.health ?? 100;
     const previousAlive = this.player?.alive ?? true;
+    const previousActors = new Map(this.actors.map(actor => [actor.id, actor]));
+    const previousVehicles = new Map((this.vehicles || []).map(vehicle => [vehicle.id, vehicle]));
     this.map = MAPS[snapshot.mapId] || this.map;
     this.mode = GAME_MODES[snapshot.modeId] || this.mode;
     this.rules = resolveMatchCondition({ conditionId: snapshot.conditionId || this.rules.id });
@@ -90,6 +94,29 @@ export class NetworkGameState {
     this.vehicles = Array.isArray(snapshot.vehicles) && snapshot.vehicles.length
       ? snapshot.vehicles
       : snapshot.tank ? [{ type: "tank", ...snapshot.tank }] : this.vehicles;
+    if (this.client.interpolateSnapshots) {
+      this.actorInterpolationTargets.clear();
+      for (const actor of this.actors) {
+        const previous = previousActors.get(actor.id);
+        if (!previous || actor.id === snapshot.playerId || distance(previous, actor) > 4 || previous.alive !== actor.alive) continue;
+        this.actorInterpolationTargets.set(actor.id, { x: actor.x, y: actor.y, angle: actor.angle });
+        actor.x = previous.x;
+        actor.y = previous.y;
+        actor.angle = previous.angle;
+      }
+      this.vehicleInterpolationTargets.clear();
+      for (const vehicle of this.vehicles) {
+        const previous = previousVehicles.get(vehicle.id);
+        if (!previous || vehicle.driverId === snapshot.playerId || distance(previous, vehicle) > 6) continue;
+        this.vehicleInterpolationTargets.set(vehicle.id, {
+          x: vehicle.x, y: vehicle.y, angle: vehicle.angle, turretAngle: vehicle.turretAngle,
+        });
+        vehicle.x = previous.x;
+        vehicle.y = previous.y;
+        vehicle.angle = previous.angle;
+        vehicle.turretAngle = previous.turretAngle;
+      }
+    }
     this.syncVehicleAliases();
     this.projectiles = snapshot.projectiles || [];
     this.effects = snapshot.effects || [];
@@ -147,11 +174,28 @@ export class NetworkGameState {
     }
   }
 
+  applyVitals(vitals) {
+    const actor = this.actors.find(candidate => candidate.id === vitals.actorId);
+    if (!actor) return;
+    const previousHealth = actor.health;
+    const previousAlive = actor.alive;
+    actor.health = Math.max(0, Number(vitals.health) || 0);
+    actor.alive = Boolean(vitals.alive);
+    actor.kills = Math.max(0, Number(vitals.kills) || 0);
+    actor.deaths = Math.max(0, Number(vitals.deaths) || 0);
+    if (vitals.score) this.score = vitals.score;
+    if (actor !== this.player) return;
+    if (previousHealth > actor.health) this.flash = Math.max(this.flash, .34);
+    if (previousAlive && !actor.alive) this.emit("death", { respawn: actor.respawn || 3.2 });
+    if (!previousAlive && actor.alive) this.emit("respawn");
+  }
+
   update(dt, input) {
     if (!this.started || this.finished || !this.player) return;
     this.hitMarker = Math.max(0, this.hitMarker - dt);
     this.shake = Math.max(0, this.shake - dt * 3);
     this.flash = Math.max(0, this.flash - dt * 3);
+    this.interpolateRemoteState(dt);
     this.localAngle = normalizeAngle(this.localAngle + input.yaw);
     this.localPitch = applyCameraPitch(this.localPitch, input.pitch);
     this.player.angle = this.localAngle;
@@ -173,6 +217,26 @@ export class NetworkGameState {
       fireHeld: input.fireHeld,
       actions: this.pendingActions.splice(0),
     });
+  }
+
+  interpolateRemoteState(dt) {
+    if (!this.client.interpolateSnapshots) return;
+    const blend = 1 - Math.exp(-Math.max(0, dt) * 18);
+    for (const actor of this.actors) {
+      const target = this.actorInterpolationTargets.get(actor.id);
+      if (!target) continue;
+      actor.x += (target.x - actor.x) * blend;
+      actor.y += (target.y - actor.y) * blend;
+      actor.angle = normalizeAngle(actor.angle + normalizeAngle(target.angle - actor.angle) * blend);
+    }
+    for (const vehicle of this.vehicles || []) {
+      const target = this.vehicleInterpolationTargets.get(vehicle.id);
+      if (!target) continue;
+      vehicle.x += (target.x - vehicle.x) * blend;
+      vehicle.y += (target.y - vehicle.y) * blend;
+      vehicle.angle = normalizeAngle(vehicle.angle + normalizeAngle(target.angle - vehicle.angle) * blend);
+      vehicle.turretAngle = normalizeAngle(vehicle.turretAngle + normalizeAngle(target.turretAngle - vehicle.turretAngle) * blend);
+    }
   }
 
   suspendInput() {

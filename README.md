@@ -11,7 +11,7 @@
   <a href="https://github.com/wl4g-games/mycf/actions/workflows/release.yml"><img src="https://github.com/wl4g-games/mycf/actions/workflows/release.yml/badge.svg?branch=main&event=push" alt="Release and deployment status" height="28"></a>
 </p>
 
-Play in your browser · 打开即玩 · Solo and online · 单机与联机<br>
+Play in your browser · 打开即玩 · Solo, online, and server-free LAN · 单机、网络与无中心服务的局域网<br>
 Two maps · 两张地图 · Four battle sizes · 四种规模 · Four loadouts · 四套背包 · Up to 16v16 · 最高 16v16
 
 **Unlimited firearm ammunition, arrows, grenades, and vehicle rounds.**<br>
@@ -21,14 +21,16 @@ Two maps · 两张地图 · Four battle sizes · 四种规模 · Four loadouts �
 
 ## About · 游戏简介
 
-Toon Strike is an original cartoon-style 3D H5 first-person shooter powered by a Canvas ray-casting renderer, code-drawn combatants and vehicles, layered Web Audio effects, and a server-authoritative Node.js WebSocket multiplayer service. Its maps and visual assets were created specifically for this project and do not reuse recognizable third-party game maps, characters, logos, or artwork.
+Toon Strike is an original cartoon-style 3D H5 first-person shooter powered by a Canvas ray-casting renderer, code-drawn combatants and vehicles, layered Web Audio effects, a server-authoritative Node.js WebSocket mode, and a server-free WebRTC LAN mode. Its maps and visual assets were created specifically for this project and do not reuse recognizable third-party game maps, characters, logos, or artwork.
 
-《泡泡战区》是一款原创动画片风格 3D H5 第一人称射击游戏，采用 Canvas 射线渲染、代码绘制的战斗角色与载具、Web Audio 分层音效，以及服务器权威的 Node.js WebSocket 多人服务。地图与视觉素材均为本项目专门创作，不复用可识别的第三方游戏地图、角色、标志或美术资源。
+《泡泡战区》是一款原创动画片风格 3D H5 第一人称射击游戏，采用 Canvas 射线渲染、代码绘制的战斗角色与载具、Web Audio 分层音效、服务器权威的 Node.js WebSocket 网络模式，以及无需中心服务器的 WebRTC 局域网模式。地图与视觉素材均为本项目专门创作，不复用可识别的第三方游戏地图、角色、标志或美术资源。
 
 ## Features · 核心功能
 
-- **Solo and online · 单机与联机：** Choose the game type before selecting a map, team size, and loadout.<br>
-  进入部署界面后，先选择单机版或网络版，再选择地图、队伍规模与作战背包。
+- **Solo, online, and LAN · 单机、网络与局域网：** Choose the game type before selecting a map, team size, and loadout.<br>
+  进入部署界面后，先选择单机版、网络版或局域网版，再选择地图、队伍规模与作战背包。
+- **Server-free LAN squad · 无中心服务局域网小队：** Players on the same Wi-Fi pair one by one with complete offer/answer QR codes. Human capacity follows the selected `NvN` mode, from two people in `1v1` through 32 in `16v16`; the host may start early after one client joins and AI fills every vacancy. The host browser runs authoritative simulation and connects directly to each client over WebRTC DataChannels, with no WebSocket or signaling server.<br>
+  同一 Wi-Fi 下的玩家通过包含完整 Offer/Answer 的二维码逐一配对。真人容量跟随所选 `NvN` 模式，从 `1v1` 的 2 人一直到 `16v16` 的 32 人；连接一名客户端后房主即可提前开局，其余席位由 AI 补齐。房主浏览器执行权威模拟，并通过 WebRTC DataChannel 与每名客户端直连，全程不使用 WebSocket 或信令服务器。
 - **AI replacement · AI 补位：** Every other slot in solo mode is controlled by an AI NPC; online room owners may start before all human slots are filled, and AI automatically fills every vacancy on both teams.<br>
   单机版除玩家外全部由 AI NPC 控制；网络房主无需等真人满员即可开局，双方空缺席位会自动由 AI 补齐。
 - **Four battle sizes · 四种规模：** Play `1v1`, `4v4`, `8v8`, or `16v16`, with balanced teams in every mode. The default remains `4v4`.<br>
@@ -57,6 +59,8 @@ Toon Strike is an original cartoon-style 3D H5 first-person shooter powered by a
   队友与敌人会根据实际位移交替迈腿，不再以固定站姿在地图上滑行。
 - **Parent control · 家长控制：** An optional global play timer supports `1 / 3 / 5 / 10 / 20`-minute intervals and learning checkpoints requiring `1 / 3 / 5 / 10` correct answers. Only active, unpaused gameplay consumes time, and countdown progress survives refreshes.<br>
   可选的全局家长控制支持 `1 / 3 / 5 / 10 / 20` 分钟游戏间隔，以及需答对 `1 / 3 / 5 / 10` 题的学习检查点。只有实际且未暂停的游戏会消耗时间，刷新页面后倒计时进度仍会保留。
+- **Jumprun-aligned curriculum · 对齐 Jumprun 的题库：** The checkpoint uses the same 100 bilingual questions, eight-subject weighting, balanced answer positions, full-bank exhaustion, and eight-question recent-repeat guard as the neighboring Jumprun project.<br>
+  学习检查点严格采用与隔壁 Jumprun 项目一致的 100 道中英双语题目、八科权重、答案位置均衡、全题库轮完再重复，以及最近 8 题防重复规则。
 - **Bilingual player UI · 双语玩家界面：** The interface supports English and Simplified Chinese, follows the browser language by default, and remembers manual language changes.<br>
   玩家界面支持英文与简体中文，默认跟随浏览器语言，并会记住手动切换的语言。
 
@@ -120,11 +124,29 @@ The browser connects to the same-origin `/ws` endpoint by default. GitHub Pages 
 
 浏览器默认连接当前域名下的 `/ws`。GitHub Pages 可以托管静态游戏但无法运行 WebSocket 服务，因此 Pages 的网络模式需要通过 `VITE_MYCF_WS_URL` 指向单独部署的 Vercel 端点。
 
+## LAN flow · 局域网对战流程
+
+```text
+Choose LAN and a callsign / 选择局域网并输入别名
+  → Host creates a room / 房主创建房间
+  → Host shows one complete Offer QR / 房主展示一个完整 Offer 二维码
+  → One client scans it and shows an Answer QR / 一名客户端扫码并展示 Answer 二维码
+  → Host scans that Answer / 房主扫描该 Answer
+  → Repeat until the selected NvN capacity / 重复配对直至所选 NvN 容量
+  → Start early or wait for more humans / 提前开局或等待更多真人
+```
+
+LAN mode sets `iceServers: []`, waits for ICE gathering to complete, and embeds the full SDP plus host candidates in each compressed QR code. It creates an unordered, zero-retransmit `state` channel for 20 Hz snapshots and an ordered `reliable` channel for joins, combat events, HP/death/respawn outcomes, and match results. Clients send sequenced input only; the host validates inputs, advances the existing authoritative simulation, and broadcasts state while clients interpolate remote movement.<br>
+局域网模式设置 `iceServers: []`，等待 ICE 收集完整结束，并把完整 SDP 与 host candidate 压缩进每个二维码。系统建立无序且不重传的 `state` 通道来发送 20 Hz 快照，同时以有序 `reliable` 通道传输加入、战斗事件、生命值/死亡/复活结果与赛果。客户端只发送带序号的输入；房主校验输入、推进现有权威模拟并广播状态，客户端则对远端移动进行插值。
+
+This MVP targets devices on the same reachable Wi-Fi/LAN and intentionally provides no STUN, TURN, NAT traversal, matchmaking, accounts, public signaling, or host migration. If the host closes the tab or disconnects, the room ends. QR scanning uses the camera when browser permission is available and also supports image scanning and manual copy/paste. Camera access requires a secure context such as HTTPS (localhost is also accepted by browsers).<br>
+此 MVP 面向处于同一可达 Wi-Fi/局域网的设备，刻意不提供 STUN、TURN、NAT 穿透、匹配、账号、公网信令或房主迁移。房主关闭页面或断开后，房间即结束。二维码可在浏览器授权后使用相机扫描，也支持图片识别和手动复制粘贴；相机访问需要 HTTPS 等安全上下文（浏览器通常也接受 localhost）。
+
 ## Language policy · 语言规范
 
-Player-facing Chinese text is centralized in `src/locales/zh-CN.js`, while stable message keys, protocol codes, source code, configuration, CI output, logs, and tests remain English. The root README is intentionally bilingual for users and contributors; the rest of the technical documentation remains English.
+Player-facing Chinese text is centralized in the exact Simplified Chinese catalogs under `src/locales/`, while stable message keys, protocol codes, source code, configuration, CI output, logs, and tests remain English. The root README is intentionally bilingual for users and contributors; the rest of the technical documentation remains English.
 
-面向玩家的中文文案集中保存在 `src/locales/zh-CN.js`，稳定消息键、协议码、源代码、配置、CI 输出、日志与测试均保持英文。根目录 README 为方便用户与贡献者而特意采用中英双语，其余技术文档仍保持英文。
+面向玩家的中文文案集中保存在 `src/locales/` 下明确的简体中文语言文件中，稳定消息键、协议码、源代码、配置、CI 输出、日志与测试均保持英文。根目录 README 为方便用户与贡献者而特意采用中英双语，其余技术文档仍保持英文。
 
 Automated tests require the English and Simplified Chinese catalogs to expose identical non-empty keys and matching placeholders. Another source-text guard rejects Chinese characters outside the Simplified Chinese UI catalog and this bilingual README.
 

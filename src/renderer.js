@@ -1,11 +1,11 @@
 import {
   CHARACTER_PROFILES, DEFAULT_CHARACTER_ID, FOV, MAPS, SCOPED_FOV, TEAM, THROWABLES,
   clamp, normalizeAngle, resolveCharacterId, tileAt,
-} from "./config.js?v=20261006-grenade-v9";
-import { MotionTracker, gaitPose } from "./render-animation.js?v=20261006-grenade-v9";
-import { WeaponViewmodel } from "./weapon-viewmodel.js?v=20261006-grenade-v9";
-import { cameraHorizon } from "./camera.js?v=20261006-grenade-v9";
-import { CombatTracerSystem } from "./combat-tracer.js?v=20261006-grenade-v9";
+} from "./config.js?v=20261006-lan-v10";
+import { MotionTracker, gaitPose } from "./render-animation.js?v=20261006-lan-v10";
+import { WeaponViewmodel } from "./weapon-viewmodel.js?v=20261006-lan-v10";
+import { cameraHorizon } from "./camera.js?v=20261006-lan-v10";
+import { CombatTracerSystem } from "./combat-tracer.js?v=20261006-lan-v10";
 
 const TEAM_COLORS = {
   seal: { main: "#2ca9df", shade: "#155d91", light: "#75dcff", gear: "#17394f" },

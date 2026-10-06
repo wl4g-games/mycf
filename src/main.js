@@ -1,20 +1,23 @@
 import {
-  CHARACTER_PROFILES, DEFAULT_CHARACTER_ID, DEFAULT_CONDITION_ID, LOADOUTS, MAPS, MATCH_CONDITIONS,
+  CHARACTER_PROFILES, DEFAULT_CHARACTER_ID, DEFAULT_CONDITION_ID, GAME_MODES, LOADOUTS, MAPS, MATCH_CONDITIONS,
   MATCH_CONDITION_IDS, TEAM, THROWABLES, VEHICLE_TYPES, WEAPONS, alliedPodium, summarizeActorStats,
-} from "./config.js?v=20261006-grenade-v9";
-import { GameAudio } from "./audio.js?v=20261006-grenade-v9";
-import { fullscreenElement, supportsFullscreen, toggleFullscreen } from "./fullscreen.js?v=20261006-grenade-v9";
-import { GameState } from "./game.js?v=20261006-grenade-v9";
-import { applyDocumentTranslations, getLocale, onLocaleChange, t, toggleLocale } from "./i18n.js?v=20261006-grenade-v9";
-import { InputController } from "./input.js?v=20261006-grenade-v9";
-import { NetworkClient } from "./network.js?v=20261006-grenade-v9";
-import { NetworkGameState } from "./network-game.js?v=20261006-grenade-v9";
-import { ParentalControl } from "./parental/index.js?v=20261006-grenade-v9";
-import { ParentalControlView } from "./parental/view.js?v=20261006-grenade-v9";
-import { Renderer } from "./renderer.js?v=20261006-grenade-v9";
-import { LocalGameSetupRepository } from "./repositories/game-setup-repository.js?v=20261006-grenade-v9";
-import { LocalParentalControlRepository } from "./repositories/parental-control-repository.js?v=20261006-grenade-v9";
-import { LocalRoomStateRepository } from "./repositories/room-state-repository.js?v=20261006-grenade-v9";
+} from "./config.js?v=20261006-lan-v10";
+import { GameAudio } from "./audio.js?v=20261006-lan-v10";
+import { fullscreenElement, supportsFullscreen, toggleFullscreen } from "./fullscreen.js?v=20261006-lan-v10";
+import { GameState } from "./game.js?v=20261006-lan-v10";
+import { applyDocumentTranslations, getLocale, onLocaleChange, t, toggleLocale } from "./i18n.js?v=20261006-lan-v10";
+import { InputController } from "./input.js?v=20261006-lan-v10";
+import { LanClient } from "./lan/client.ts?v=20261006-lan-v10";
+import { LanHost } from "./lan/host.ts?v=20261006-lan-v10";
+import { LanQrScanner, renderLanQr } from "./lan/qr-signaling.ts?v=20261006-lan-v10";
+import { NetworkClient } from "./network.js?v=20261006-lan-v10";
+import { NetworkGameState } from "./network-game.js?v=20261006-lan-v10";
+import { ParentalControl } from "./parental/index.js?v=20261006-lan-v10";
+import { ParentalControlView } from "./parental/view.js?v=20261006-lan-v10";
+import { Renderer } from "./renderer.js?v=20261006-lan-v10";
+import { LocalGameSetupRepository } from "./repositories/game-setup-repository.js?v=20261006-lan-v10";
+import { LocalParentalControlRepository } from "./repositories/parental-control-repository.js?v=20261006-lan-v10";
+import { LocalRoomStateRepository } from "./repositories/room-state-repository.js?v=20261006-lan-v10";
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => Array.from(document.querySelectorAll(selector));
@@ -40,12 +43,18 @@ const setupRepository = new LocalGameSetupRepository();
 const roomStateRepository = new LocalRoomStateRepository();
 const parentalStateRepository = new LocalParentalControlRepository();
 const network = new NetworkClient({ stateRepository: roomStateRepository });
+const lanScanner = new LanQrScanner("lan-qr-reader");
 const selected = setupRepository.load();
 const parentalControl = new ParentalControl({ stateRepository: parentalStateRepository, localize: t });
 const touchDevice = navigator.maxTouchPoints > 0 || "ontouchstart" in window;
 
 let game;
 let networkGame = null;
+let lanGame = null;
+let lanSession = null;
+let lanUnsubscribe = [];
+let lanSignalHandler = null;
+let lanSignalNext = null;
 let paused = false;
 let modalMode = "pause";
 let announcementTimer = 0;
@@ -128,9 +137,11 @@ function updateStartButtonLabel() {
     ? "start.selectVersion"
     : selected.versionId === "solo"
       ? "start.solo"
-      : network.room
-        ? "start.roomCreated"
-        : network.self ? "start.createRoom" : "start.register";
+      : selected.versionId === "lan"
+        ? "start.lan"
+        : network.room
+          ? "start.roomCreated"
+          : network.self ? "start.createRoom" : "start.register";
   startButton.querySelector("span").textContent = t(key);
 }
 
@@ -147,8 +158,18 @@ function exitPointerLock() {
   try { document.exitPointerLock(); } catch (error) {}
 }
 
+function activeRemoteTransport() {
+  if (game === lanGame) return lanSession;
+  if (game === networkGame) return network;
+  return null;
+}
+
+function activeRemoteGame() {
+  return game === lanGame ? lanGame : game === networkGame ? networkGame : null;
+}
+
 function isNetworkBattle() {
-  return selected.versionId === "network" && game === networkGame;
+  return Boolean(activeRemoteTransport());
 }
 
 function syncBattleControls() {
@@ -209,7 +230,7 @@ function renderSetupPreferences() {
   $("#deployment-options").setAttribute("aria-disabled", String(!selectedVersion));
   startButton.disabled = !selectedVersion;
   $("#alias-input").value = selected.alias || "";
-  syncRoomRuleControls(network.room);
+  syncRoomRuleControls(selected.versionId === "lan" ? lanSession?.room : network.room);
 }
 
 function syncRoomRuleControls(room) {
@@ -233,6 +254,7 @@ function syncRoomRuleControls(room) {
 }
 
 function setVersion(versionId, button) {
+  if ((network.room || lanSession?.room) && versionId !== selected.versionId) return;
   saveSetup({ versionId });
   selectOption("[data-version]", button);
   $("#deployment-options").classList.remove("is-locked");
@@ -241,9 +263,21 @@ function setVersion(versionId, button) {
   updateStartButtonLabel();
   if (versionId === "solo") {
     $("#network-lobby").classList.add("is-hidden");
+    $("#lan-lobby").classList.add("is-hidden");
     aliasModal.classList.add("is-hidden");
-  } else if (!network.self) showAliasModal();
-  else $("#network-lobby").classList.remove("is-hidden");
+  } else if (versionId === "network") {
+    $("#lan-lobby").classList.add("is-hidden");
+    if (!network.self) showAliasModal();
+    else $("#network-lobby").classList.remove("is-hidden");
+  } else {
+    $("#network-lobby").classList.add("is-hidden");
+    if (!selected.alias) showAliasModal();
+    else {
+      $("#lan-lobby").classList.remove("is-hidden");
+      renderLanLobby();
+    }
+  }
+  syncRoomRuleControls(versionId === "lan" ? lanSession?.room : network.room);
 }
 
 $$('[data-version]').forEach(button => bindTap(button, () => setVersion(button.dataset.version, button)));
@@ -284,6 +318,7 @@ $$('[data-loadout]').forEach(button => bindTap(button, () => {
   saveSetup({ loadoutId: button.dataset.loadout });
   selectOption("[data-loadout]", button);
   if (network.self) network.updateProfile(selected.loadoutId, selected.characterId);
+  if (lanSession?.self) lanSession.updateProfile(selected.loadoutId, selected.characterId);
 }));
 
 $$('[data-character]').filter(button => button.classList.contains("character-option")).forEach(button => bindTap(button, () => {
@@ -291,10 +326,15 @@ $$('[data-character]').filter(button => button.classList.contains("character-opt
   saveSetup({ characterId });
   selectOption(".character-option", button);
   if (network.self) network.updateProfile(selected.loadoutId, selected.characterId);
+  if (lanSession?.self) lanSession.updateProfile(selected.loadoutId, selected.characterId);
 }));
 
 function showAliasModal() {
   $("#alias-error").textContent = "";
+  const isLan = selected.versionId === "lan";
+  $("#alias-kicker").textContent = t(isLan ? "alias.lan.kicker" : "alias.kicker");
+  $("#alias-description").textContent = t(isLan ? "alias.lan.description" : "alias.description");
+  $("#alias-confirm span").textContent = t(isLan ? "alias.lan.confirm" : "alias.confirm");
   aliasModal.classList.remove("is-hidden");
   window.setTimeout(() => $("#alias-input").focus(), 30);
 }
@@ -304,6 +344,14 @@ async function registerNetworkIdentity() {
   const error = $("#alias-error");
   const confirm = $("#alias-confirm");
   if (alias.length < 2) { error.textContent = t("alias.tooShort"); return; }
+  if (selected.versionId === "lan") {
+    saveSetup({ alias });
+    aliasModal.classList.add("is-hidden");
+    $("#lan-lobby").classList.remove("is-hidden");
+    renderLanLobby();
+    updateStartButtonLabel();
+    return;
+  }
   confirm.disabled = true;
   error.textContent = t("alias.connecting");
   try {
@@ -339,10 +387,236 @@ function createNetworkRoom() {
   startButton.querySelector("span").textContent = t("start.creatingRoom");
 }
 
+function lanProfile() {
+  return { alias: selected.alias, loadoutId: selected.loadoutId, characterId: selected.characterId };
+}
+
+function clearLanBindings() {
+  lanUnsubscribe.splice(0).forEach(unsubscribe => unsubscribe());
+}
+
+function bindLanSession(session) {
+  clearLanBindings();
+  lanSession = session;
+  const on = (type, handler) => lanUnsubscribe.push(session.on(type, handler));
+  on("registered", () => {
+    closeLanSignalDialog();
+    renderLanLobby();
+  });
+  on("room_state", renderLanLobby);
+  on("room_left", renderLanLobby);
+  on("debug", renderLanDebug);
+  on("status", payload => {
+    const statusText = t(payload.connected ? "lan.connected" : payload.code === "LAN_HOST_CLOSED" ? "lan.hostClosed" : "lan.chooseRole");
+    if (!payload.connected && lanSession === session) {
+      const battleEnded = game === lanGame && lanGame?.started;
+      if (lanGame) {
+        lanGame.started = false;
+        lanGame.finished = true;
+      }
+      lanSession = null;
+      lanGame = null;
+      clearLanBindings();
+      if (battleEnded) returnToLobby();
+    }
+    renderLanLobby();
+    $("#lan-status").textContent = statusText;
+  });
+  on("error", payload => {
+    $("#lan-status").textContent = payload.code === "LAN_NEEDS_PLAYERS"
+      ? t("lan.needPlayers", { minimum: session.minimumPlayers || 2 })
+      : payload.message || payload.code;
+  });
+  on("match_start", payload => {
+    lanGame = new NetworkGameState(session, audio, handleGameEvent);
+    lanGame.start(payload);
+    game = lanGame;
+    enterBattle();
+    announce(t("announce.lanStart", { map: mapName(game.map), mode: game.mode.label }));
+  });
+  on("snapshot", payload => { if (lanGame?.started) lanGame.applySnapshot(payload); });
+  on("combat_event", payload => { if (lanGame?.started) lanGame.handleCombatEvent(payload); });
+  on("vitals", payload => { if (lanGame?.started) lanGame.applyVitals(payload); });
+  on("match_end", payload => { if (lanGame?.started) showMatchEnd(payload); });
+  renderLanLobby();
+  renderLanDebug({ peers: session.debugPeers || [] });
+}
+
+function endLanSession() {
+  closeLanSignalDialog();
+  if (lanSession) lanSession.leaveRoom();
+  clearLanBindings();
+  lanSession = null;
+  lanGame = null;
+  syncRoomRuleControls(null);
+  renderLanLobby();
+}
+
+function createLanRoom() {
+  if (!selected.alias) return showAliasModal();
+  if (lanSession) endLanSession();
+  const host = new LanHost(lanProfile(), {
+    mapId: selected.mapId,
+    modeId: selected.modeId,
+    conditionId: selected.conditionId,
+  });
+  bindLanSession(host);
+  $("#lan-status").textContent = t("lan.hostReady");
+  void pairLanPlayer();
+}
+
+function joinLanRoom() {
+  if (!selected.alias) return showAliasModal();
+  if (lanSession) endLanSession();
+  const client = new LanClient(lanProfile());
+  bindLanSession(client);
+  $("#lan-status").textContent = t("lan.clientReady");
+  openLanSignalInput("offer", async value => {
+    $("#lan-signal-status").textContent = t("lan.pairing");
+    const answer = await client.createAnswer(value);
+    await openLanSignalOutput("answer", answer);
+  });
+}
+
+async function pairLanPlayer() {
+  if (!(lanSession instanceof LanHost)) return;
+  $("#lan-status").textContent = t("lan.pairing");
+  try {
+    const offer = await lanSession.createOffer();
+    await openLanSignalOutput("offer", offer, () => openLanSignalInput("answer", async value => {
+      await lanSession.acceptAnswer(value);
+      $("#lan-signal-status").textContent = t("lan.pairing");
+      await closeLanSignalDialog();
+    }));
+  } catch (error) {
+    $("#lan-status").textContent = error.message;
+  }
+}
+
+function renderLanLobby() {
+  const room = lanSession?.room || null;
+  const self = lanSession?.self || null;
+  $("#lan-alias").textContent = self?.alias || selected.alias || t("lan.disconnected");
+  $("#lan-role-actions").classList.toggle("is-hidden", Boolean(lanSession));
+  $("#lan-room-console").classList.toggle("is-hidden", !lanSession);
+  syncRoomRuleControls(lanSession ? room || selected : null);
+  startButton.disabled = Boolean(lanSession);
+  updateStartButtonLabel();
+  if (!lanSession) {
+    $("#lan-status").textContent = t("lan.chooseRole");
+    return;
+  }
+  const members = room?.members || [];
+  $("#lan-room-code").textContent = room?.id || "------";
+  const selectedCapacity = (GAME_MODES[selected.modeId]?.teamSize || 4) * 2;
+  $("#lan-capacity").textContent = `${members.length || 1} / ${room?.maxHumans || selectedCapacity}`;
+  $("#lan-room-rules").textContent = room
+    ? t("lobby.rules", { kills: room.killTarget, time: formatTime(room.timeLimit) })
+    : t("lan.pairing");
+  const memberRoot = $("#lan-members");
+  memberRoot.replaceChildren();
+  members.forEach(member => {
+    const row = document.createElement("div");
+    row.className = "room-member";
+    const name = document.createElement("span");
+    name.textContent = member.alias;
+    const detail = document.createElement("small");
+    detail.textContent = t(member.id === room.ownerId ? "lobby.owner" : "lobby.member");
+    row.append(name, detail);
+    memberRoot.append(row);
+  });
+  const isHost = lanSession instanceof LanHost;
+  $("#lan-pair-button").classList.toggle("is-hidden", !isHost);
+  $("#lan-pair-button").disabled = !isHost || room?.status !== "waiting" || members.length >= room.maxHumans;
+  $("#lan-start-button").disabled = !isHost || room?.status !== "waiting" || members.length < (lanSession.minimumPlayers || 2);
+  $("#lan-start-button").textContent = t(isHost ? "lan.start" : "lan.waitHost");
+}
+
+function renderLanDebug(payload = {}) {
+  const root = $("#lan-debug");
+  root.replaceChildren();
+  for (const peer of payload.peers || []) {
+    const row = document.createElement("p");
+    const label = document.createElement("b");
+    label.textContent = peer.alias;
+    const detail = document.createElement("span");
+    detail.textContent = `${peer.connectionState} · ICE ${peer.iceState} · RTT ${peer.rttMs == null ? "—" : `${Math.round(peer.rttMs)} ms`}`;
+    row.append(label, detail);
+    root.append(row);
+  }
+}
+
+async function closeLanSignalDialog() {
+  await lanScanner.stop();
+  lanSignalHandler = null;
+  lanSignalNext = null;
+  $("#lan-signal-layer").classList.add("is-hidden");
+  $("#lan-qr-reader").classList.add("is-hidden");
+}
+
+function configureLanSignalDialog(kind, inputMode) {
+  const titleKey = inputMode ? `lan.scan${kind === "offer" ? "Offer" : "Answer"}.title` : `lan.${kind}.title`;
+  const copyKey = inputMode ? `lan.scan${kind === "offer" ? "Offer" : "Answer"}.copy` : `lan.${kind}.copy`;
+  $("#lan-signal-title").textContent = t(titleKey);
+  $("#lan-signal-copy").textContent = t(copyKey);
+  $("#lan-signal-status").textContent = "";
+  $("#lan-copy-button").classList.toggle("is-hidden", inputMode);
+  $("#lan-apply-button").classList.toggle("is-hidden", !inputMode);
+  $(".lan-file-button").classList.toggle("is-hidden", !inputMode);
+  $("#lan-scan-button").textContent = t(inputMode ? "lan.scan" : "lan.scanAnswer.title");
+  $("#lan-scan-button").classList.toggle("is-hidden", !inputMode && !lanSignalNext);
+  $("#lan-qr-canvas").classList.toggle("is-hidden", inputMode);
+  $("#lan-qr-reader").classList.add("is-hidden");
+  $("#lan-signal-layer").classList.remove("is-hidden");
+  window.setTimeout(() => (inputMode ? $("#lan-signal-value") : $("#lan-copy-button")).focus(), 0);
+}
+
+function openLanSignalInput(kind, handler) {
+  void lanScanner.stop();
+  lanSignalHandler = handler;
+  lanSignalNext = null;
+  $("#lan-signal-value").value = "";
+  configureLanSignalDialog(kind, true);
+}
+
+async function openLanSignalOutput(kind, value, next = null) {
+  await lanScanner.stop();
+  lanSignalHandler = null;
+  lanSignalNext = next;
+  $("#lan-signal-value").value = value;
+  configureLanSignalDialog(kind, false);
+  await renderLanQr($("#lan-qr-canvas"), value);
+}
+
+async function applyLanSignal(value = $("#lan-signal-value").value) {
+  if (!lanSignalHandler) return;
+  try {
+    await lanSignalHandler(String(value || "").trim());
+  } catch (error) {
+    $("#lan-signal-status").textContent = error.message;
+  }
+}
+
+async function startLanCamera() {
+  if (lanSignalNext) return lanSignalNext();
+  $("#lan-qr-reader").classList.remove("is-hidden");
+  $("#lan-qr-canvas").classList.add("is-hidden");
+  try {
+    await lanScanner.start(value => applyLanSignal(value), error => { $("#lan-signal-status").textContent = error.message; });
+  } catch (error) {
+    $("#lan-signal-status").textContent = error.message;
+  }
+}
+
 function begin() {
   if (!selected.versionId) return;
   if (selected.versionId === "solo") beginSolo();
-  else createNetworkRoom();
+  else if (selected.versionId === "network") createNetworkRoom();
+  else {
+    $("#lan-lobby").classList.remove("is-hidden");
+    if (!selected.alias) showAliasModal();
+    else renderLanLobby();
+  }
 }
 
 function enterBattle() {
@@ -367,9 +641,9 @@ function pauseBattle() {
   if (!game.started || game.finished || paused) return;
   paused = true;
   input.resetTransient();
-  if (game === networkGame) networkGame.suspendInput();
+  activeRemoteGame()?.suspendInput();
   modalMode = "pause";
-  showModal(t("modal.paused.title"), t(selected.versionId === "network" ? "modal.networkContinues" : "modal.paused.copy"), t("modal.tactical"));
+  showModal(t("modal.paused.title"), t(isNetworkBattle() ? "modal.networkContinues" : "modal.paused.copy"), t("modal.tactical"));
 }
 
 function returnToLobby() {
@@ -382,8 +656,13 @@ function returnToLobby() {
   hud.classList.add("is-hidden");
   landing.classList.remove("is-hidden");
   exitPointerLock();
-  $("#network-lobby").classList.remove("is-hidden");
-  renderLobby();
+  if (selected.versionId === "lan") {
+    $("#lan-lobby").classList.remove("is-hidden");
+    renderLanLobby();
+  } else {
+    $("#network-lobby").classList.remove("is-hidden");
+    renderLobby();
+  }
 }
 
 function renderLobby() {
@@ -452,7 +731,7 @@ function winnerMessage(result) {
 
 function isLocalRankingEntry(entry) {
   if (selected.versionId === "solo") return Boolean(entry.isPlayer || entry.actorId === game.player?.id);
-  return Boolean(entry.userId && entry.userId === network.self?.id);
+  return Boolean(entry.userId && entry.userId === activeRemoteTransport()?.self?.id);
 }
 
 function rankingName(entry) {
@@ -540,7 +819,7 @@ function backToPodium() {
 }
 
 function completeMatchEndAction() {
-  if (selected.versionId === "network") {
+  if (selected.versionId !== "solo") {
     returnToLobby();
     return;
   }
@@ -628,7 +907,7 @@ function showForcePrompt() {
   forcePromptOpen = true;
   paused = true;
   input.resetTransient();
-  if (isNetworkBattle()) networkGame.suspendInput();
+  activeRemoteGame()?.suspendInput();
   updateForcePromptCopy();
   forceButton.disabled = true;
   forceModal.classList.remove("is-hidden");
@@ -652,10 +931,13 @@ function confirmForceAction() {
   forceCancelButton.disabled = true;
   forceConfirmButton.disabled = true;
   if (isNetworkBattle()) {
-    networkGame.suspendInput();
-    networkGame.started = false;
-    networkGame.finished = true;
-    network.leaveRoom({ clearProjection: true });
+    const remoteGame = activeRemoteGame();
+    const transport = activeRemoteTransport();
+    remoteGame.suspendInput();
+    remoteGame.started = false;
+    remoteGame.finished = true;
+    if (transport === network) network.leaveRoom({ clearProjection: true });
+    else endLanSession();
     returnToLobby();
     return;
   }
@@ -775,7 +1057,7 @@ const parentalView = new ParentalControlView({
     parentalQuizWasPaused = paused;
     paused = true;
     input.resetTransient();
-    if (game === networkGame) networkGame.suspendInput();
+    activeRemoteGame()?.suspendInput();
     exitPointerLock();
   },
   onQuizClose: () => {
@@ -805,6 +1087,7 @@ function frame(now) {
   });
   if (parentalTick.justLocked) parentalView.openQuiz();
   else if (game.started && !game.finished) parentalView.ensureBlocking();
+  lanSession?.tick(elapsedSeconds);
   if (!paused) game.update(dt, { ...state, items: forwarded });
   if (game.started) audio.updateWorld(game, paused ? 0 : dt);
   renderer.render(game, paused ? 0 : dt);
@@ -822,6 +1105,7 @@ bindTap($("#language-toggle"), toggleLocale);
 bindTap($("#alias-confirm"), registerNetworkIdentity);
 bindTap($("#alias-cancel"), () => {
   aliasModal.classList.add("is-hidden");
+  $("#lan-lobby").classList.add("is-hidden");
   saveSetup({ versionId: null });
   selectOption("[data-version]", null);
   $("#deployment-options").classList.add("is-locked");
@@ -831,6 +1115,29 @@ bindTap($("#alias-cancel"), () => {
 bindTap($("#create-room-button"), createNetworkRoom);
 bindTap($("#leave-room-button"), () => network.leaveRoom());
 bindTap($("#start-room-button"), () => network.startRoom());
+bindTap($("#lan-create-button"), createLanRoom);
+bindTap($("#lan-join-button"), joinLanRoom);
+bindTap($("#lan-leave-button"), endLanSession);
+bindTap($("#lan-pair-button"), pairLanPlayer);
+bindTap($("#lan-start-button"), () => lanSession?.startRoom());
+bindTap($("#lan-signal-close"), closeLanSignalDialog);
+bindTap($("#lan-copy-button"), async () => {
+  try {
+    await navigator.clipboard.writeText($("#lan-signal-value").value);
+    $("#lan-signal-status").textContent = t("lan.copied");
+  } catch (error) {
+    $("#lan-signal-status").textContent = error.message;
+  }
+});
+bindTap($("#lan-scan-button"), startLanCamera);
+bindTap($("#lan-apply-button"), () => applyLanSignal());
+$("#lan-scan-file").addEventListener("change", async event => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try { await applyLanSignal(await lanScanner.scanFile(file)); }
+  catch (error) { $("#lan-signal-status").textContent = error.message; }
+  finally { event.target.value = ""; }
+});
 bindTap($("#decline-invite"), () => {
   if (pendingInvite) network.respondInvite(pendingInvite.room.id, false);
   pendingInvite = null;
@@ -847,6 +1154,19 @@ bindTap($("#match-end-action"), completeMatchEndAction);
 $("#alias-input").addEventListener("keydown", event => { if (event.key === "Enter") registerNetworkIdentity(); });
 window.addEventListener("keydown", event => {
   if (parentalView.isQuizOpen() || parentalView.isSettingsOpen()) return;
+  if (!$("#lan-signal-layer").classList.contains("is-hidden")) {
+    if (event.code === "Escape") {
+      event.preventDefault();
+      void closeLanSignalDialog();
+    } else if (event.code === "Tab") {
+      const controls = $$("#lan-signal-layer button, #lan-signal-layer textarea, #lan-signal-layer input").filter(control => !control.disabled && control.offsetParent !== null);
+      const current = controls.indexOf(document.activeElement);
+      const direction = event.shiftKey ? -1 : 1;
+      controls[(current + direction + controls.length) % controls.length]?.focus();
+      event.preventDefault();
+    }
+    return;
+  }
   if (event.code === "Escape" && forcePromptOpen) {
     event.preventDefault();
     input.resetTransient();
@@ -891,22 +1211,28 @@ document.addEventListener("pointerlockchange", () => {
   .forEach(type => document.addEventListener(type, syncBattleControls));
 window.addEventListener("blur", () => {
   input.resetTransient();
-  if (game === networkGame) networkGame.suspendInput();
+  activeRemoteGame()?.suspendInput();
 });
 onLocaleChange(() => {
   renderConditionOptions();
   parentalView.refreshLanguage(t);
+  if (!aliasModal.classList.contains("is-hidden")) showAliasModal();
   updateStartButtonLabel();
   syncBattleControls();
   if (forcePromptOpen) updateForcePromptCopy();
   renderPendingInvite();
   if (network.self) renderLobby();
+  if (selected.versionId === "lan") renderLanLobby();
   if (lastMatchResult) {
     renderPodium(lastMatchResult);
     renderRanking(lastMatchResult);
   }
 });
-window.addEventListener("pagehide", () => parentalControl.flush());
+window.addEventListener("pagehide", () => {
+  parentalControl.flush();
+  void lanScanner.stop();
+  lanSession?.close("page_hidden");
+});
 document.addEventListener("visibilitychange", () => {
   lastTime = performance.now();
   if (document.hidden) parentalControl.flush();

@@ -21,7 +21,7 @@ export const DEFAULT_GAME_SETUP = Object.freeze({
   alias: "",
 });
 
-const VERSION_IDS = new Set(["solo", "network"]);
+const VERSION_IDS = new Set(["solo", "network", "lan"]);
 const ALIAS_PATTERN = /^[\p{L}\p{N}_\-\s]{2,16}$/u;
 
 function knownId(collection, value, fallback) {

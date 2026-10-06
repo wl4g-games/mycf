@@ -1,4 +1,8 @@
-import { PARENTAL_QUESTION_BANK, localizeParentalQuestion } from "./question-bank.js";
+import {
+  PARENTAL_QUESTION_BANK,
+  PARENTAL_SUBJECT_WEIGHTS,
+  localizeParentalQuestion,
+} from "./question-bank.js";
 import { PARENTAL_QUESTION_OPTIONS } from "./settings.js";
 
 function randomIndex(length, random) {
@@ -16,29 +20,59 @@ function shuffled(items, random) {
   return result;
 }
 
+function chooseWeightedSubject(subjects, weights, random) {
+  const total = subjects.reduce((sum, subject) => sum + (weights[subject] || 1), 0);
+  const sample = Number(random());
+  const unit = Number.isFinite(sample) ? Math.max(0, Math.min(0.999999999999, sample)) : 0;
+  let cursor = unit * total;
+  for (const subject of subjects) {
+    cursor -= weights[subject] || 1;
+    if (cursor < 0) return subject;
+  }
+  return subjects.at(-1);
+}
+
 export function createParentalQuestionPicker({
   questions = PARENTAL_QUESTION_BANK,
+  subjectWeights = PARENTAL_SUBJECT_WEIGHTS,
   random = Math.random,
 } = {}) {
   if (!Array.isArray(questions) || questions.length === 0) {
     throw new TypeError("A non-empty question bank is required.");
   }
 
-  let deck = [];
-  let previousId = null;
+  const subjects = [...new Set(questions.map(question => question.subject || question.subjectKey))];
+  const sourceBySubject = new Map(subjects.map(subject => [
+    subject,
+    questions.filter(question => (question.subject || question.subjectKey) === subject),
+  ]));
+  let pools = new Map();
+  const recentIds = [];
 
   function refill() {
-    deck = shuffled(questions, random);
-    if (deck.length > 1 && deck[0].id === previousId) {
-      [deck[0], deck[1]] = [deck[1], deck[0]];
-    }
+    pools = new Map(subjects.map(subject => [subject, shuffled(sourceBySubject.get(subject), random)]));
   }
+
+  function remember(id) {
+    recentIds.push(id);
+    if (recentIds.length > 8) recentIds.shift();
+  }
+
+  refill();
 
   return Object.freeze({
     next() {
-      if (deck.length === 0) refill();
-      const question = deck.shift();
-      previousId = question.id;
+      let available = subjects.filter(subject => pools.get(subject)?.length);
+      if (available.length === 0) {
+        refill();
+        available = [...subjects];
+      }
+      const subject = chooseWeightedSubject(available, subjectWeights, random);
+      const pool = pools.get(subject);
+      let questionIndex = pool.findIndex(question => !recentIds.includes(question.id));
+      if (questionIndex < 0) questionIndex = 0;
+      const [question] = pool.splice(questionIndex, 1);
+      remember(question.id);
       return question;
     },
   });
