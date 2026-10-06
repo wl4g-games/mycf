@@ -5,7 +5,10 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const simplifiedChineseCatalog = "src/locales/zh-CN.js";
+const simplifiedChineseCatalog = new Set([
+  "src/locales/parental-zh-CN.js",
+  "src/locales/zh-CN.js",
+]);
 const bilingualReadme = "README.md";
 const ignoredDirectories = new Set([".git", "assets", "dist", "node_modules"]);
 const chineseCharacters = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/u;
@@ -32,7 +35,7 @@ test("Chinese characters are limited to UI localization and the bilingual root R
     content.toString("utf8").split("\n").forEach((line, index) => {
       if (!chineseCharacters.test(line)) return;
       if (projectPath === bilingualReadme) return;
-      if (projectPath === simplifiedChineseCatalog && localizedMessageLine.test(line)) {
+      if (simplifiedChineseCatalog.has(projectPath) && localizedMessageLine.test(line)) {
         localizedLineCount += 1;
         return;
       }

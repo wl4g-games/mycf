@@ -4,10 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
     <meta name="theme-color" content="#143a57" />
-    <meta name="description" content="Toon Strike is an original cartoon 3D H5 shooter with solo and online multiplayer, two maps, four loadouts, and battles up to 16v16." data-i18n-content="meta.description" />
+    <meta name="description" content="Toon Strike is an original cartoon 3D H5 shooter with solo, online, and server-free LAN multiplayer." data-i18n-content="meta.description" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23ffe15a'/%3E%3Cpath d='M14 20h36v10H38v20H26V30H14z' fill='%23173049'/%3E%3C/svg%3E" />
     <title data-i18n="meta.title">Toon Strike</title>
-    <link rel="stylesheet" href="styles.css?v=20261006-grenade-v9" />
+    <link rel="stylesheet" href="styles.css?v=20261006-lan-v10" />
   </head>
   <body>
     <main id="game-shell">
@@ -36,6 +36,7 @@
             <div class="version-options">
               <button type="button" class="version-option" data-version="solo"><strong data-i18n="setup.version.solo">SOLO</strong><small data-i18n="setup.version.solo.description">Every other slot is filled by AI NPCs</small></button>
               <button type="button" class="version-option" data-version="network"><strong data-i18n="setup.version.network">ONLINE</strong><small data-i18n="setup.version.network.description">Player rooms, invitations, and automatic AI fill</small></button>
+              <button type="button" class="version-option" data-version="lan"><strong data-i18n="setup.version.lan">LAN</strong><small data-i18n="setup.version.lan.description">Direct QR pairing; capacity follows the selected team size</small></button>
             </div>
           </section>
 
@@ -111,6 +112,25 @@
             <div id="invite-card" class="invite-card is-hidden">
               <p id="invite-copy">ROOM INVITATION RECEIVED</p>
               <div><button type="button" id="decline-invite" data-i18n="lobby.decline">DECLINE</button><button type="button" id="accept-invite" data-i18n="lobby.accept">ACCEPT</button></div>
+            </div>
+          </section>
+
+          <section id="lan-lobby" class="network-lobby lan-lobby is-hidden" aria-live="polite">
+            <div class="lobby-identity"><span><i id="lan-dot"></i><b id="lan-alias" data-i18n="lan.disconnected">LAN NOT STARTED</b></span><small id="lan-status" data-i18n="lan.chooseRole">CHOOSE HOST OR CLIENT</small></div>
+            <div id="lan-role-actions" class="lan-role-actions">
+              <p data-i18n="lan.description">Pair directly over local Wi-Fi. QR codes carry complete ICE descriptions; no signaling server is used.</p>
+              <div><button type="button" id="lan-create-button" class="secondary-button" data-i18n="lan.create">CREATE ROOM</button><button type="button" id="lan-join-button" class="secondary-button" data-i18n="lan.join">JOIN ROOM</button></div>
+            </div>
+            <div id="lan-room-console" class="room-console is-hidden">
+              <header><span><span data-i18n="lobby.room">ROOM</span> <b id="lan-room-code">------</b></span><small id="lan-capacity">1 / 8</small></header>
+              <p id="lan-room-rules" class="room-rules">FIRST TO 20 · 05:00</p>
+              <div id="lan-members" class="room-members"></div>
+              <div id="lan-debug" class="lan-debug"></div>
+              <div class="room-actions">
+                <button type="button" id="lan-leave-button" class="ghost-button" data-i18n="lobby.leave">LEAVE ROOM</button>
+                <button type="button" id="lan-pair-button" class="secondary-button" data-i18n="lan.addPlayer">ADD PLAYER</button>
+                <button type="button" id="lan-start-button" class="secondary-button" data-i18n="lan.start">START LAN MATCH</button>
+              </div>
             </div>
           </section>
         </aside>
@@ -249,12 +269,31 @@
       </div>
 
       <section id="alias-modal" class="modal alias-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="alias-title">
-        <p data-i18n="alias.kicker">ONLINE ID REGISTRATION</p><h2 id="alias-title" data-i18n="alias.title">ENTER A CALLSIGN</h2>
-        <p data-i18n="alias.description">Confirm to connect automatically to the configured multiplayer WebSocket service. Callsigns are unique while online.</p>
+        <p id="alias-kicker" data-i18n="alias.kicker">ONLINE ID REGISTRATION</p><h2 id="alias-title" data-i18n="alias.title">ENTER A CALLSIGN</h2>
+        <p id="alias-description" data-i18n="alias.description">Confirm to connect automatically to the configured multiplayer WebSocket service. Callsigns are unique while online.</p>
         <input id="alias-input" type="text" maxlength="16" autocomplete="nickname" placeholder="2–16 characters" data-i18n-placeholder="alias.placeholder" />
         <small id="alias-error" class="form-error"></small>
         <div class="modal-actions"><button type="button" id="alias-cancel" class="ghost-button" data-i18n="alias.back">BACK</button><button type="button" id="alias-confirm" class="primary-button"><span data-i18n="alias.confirm">CONFIRM AND CONNECT</span></button></div>
       </section>
+
+      <div id="lan-signal-layer" class="dialog-layer lan-signal-layer is-hidden" role="dialog" aria-modal="true" aria-labelledby="lan-signal-title" aria-describedby="lan-signal-copy">
+        <section class="lan-signal-modal">
+          <p data-i18n="lan.signal.kicker">OFFLINE QR SIGNALING</p>
+          <h2 id="lan-signal-title">PAIR A LAN PLAYER</h2>
+          <p id="lan-signal-copy">Scan the complete session description on the other device.</p>
+          <canvas id="lan-qr-canvas" class="lan-qr-canvas is-hidden" aria-label="LAN pairing QR code" data-i18n-aria-label="lan.qr.label"></canvas>
+          <div id="lan-qr-reader" class="lan-qr-reader is-hidden"></div>
+          <textarea id="lan-signal-value" rows="4" spellcheck="false" autocomplete="off" aria-label="LAN signaling code" data-i18n-aria-label="lan.code.label"></textarea>
+          <small id="lan-signal-status" class="form-error"></small>
+          <div class="lan-signal-tools">
+            <button type="button" id="lan-copy-button" class="ghost-button" data-i18n="lan.copy">COPY CODE</button>
+            <button type="button" id="lan-scan-button" class="secondary-button" data-i18n="lan.scan">SCAN CAMERA</button>
+            <label class="secondary-button lan-file-button"><span data-i18n="lan.scanFile">SCAN IMAGE</span><input id="lan-scan-file" type="file" accept="image/*" /></label>
+            <button type="button" id="lan-apply-button" class="primary-button"><span data-i18n="lan.apply">USE CODE</span></button>
+            <button type="button" id="lan-signal-close" class="ghost-button" data-i18n="alias.back">BACK</button>
+          </div>
+        </section>
+      </div>
 
       <section id="podium-modal" class="podium-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="podium-title">
         <header><p data-i18n="ranking.kicker">MATCH COMPLETE</p><h2 id="podium-title">AREA SECURED</h2><strong id="podium-result" data-i18n="ranking.guardiansWin">GUARDIANS WIN</strong></header>
@@ -274,6 +313,6 @@
         <button type="button" id="ranking-close" class="primary-button"><span data-i18n="ranking.backToPodium">BACK TO PODIUM</span></button>
       </section>
     </main>
-    <script type="module" src="src/main.js?v=20261006-grenade-v9"></script>
+    <script type="module" src="src/main.js?v=20261006-lan-v10"></script>
   </body>
 </html>

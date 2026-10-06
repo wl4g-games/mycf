@@ -1,7 +1,7 @@
-import { AudioCalloutPlayer } from "./audio-callout.js?v=20261006-grenade-v9";
+import { AudioCalloutPlayer } from "./audio-callout.js?v=20261006-lan-v10";
 import {
   GrenadeThreatTracker, SpatialFootstepTracker, createGrenadeAudioCue, spatialize,
-} from "./audio-spatial.js?v=20261006-grenade-v9";
+} from "./audio-spatial.js?v=20261006-lan-v10";
 
 const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
 

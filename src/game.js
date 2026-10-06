@@ -2,13 +2,13 @@ import {
   BOT_NAMES, DEFAULT_CHARACTER_ID, DEFAULT_CONDITION_ID, GAME_MODES, LOADOUTS, MAPS, TEAM, THROWABLES, WEAPONS,
   botCharacterId, clamp, createMatchResult, distance, isSolid, normalizeAngle, resolveCharacterId,
   resolveMatchCondition, spawnCells,
-} from "./config.js?v=20261006-grenade-v9";
-import { applyCameraPitch } from "./camera.js?v=20261006-grenade-v9";
-import { createShotEvent } from "./shot-geometry.js?v=20261006-grenade-v9";
+} from "./config.js?v=20261006-lan-v10";
+import { applyCameraPitch } from "./camera.js?v=20261006-lan-v10";
+import { createShotEvent } from "./shot-geometry.js?v=20261006-lan-v10";
 import {
   ACTOR_COLLISION_RADIUS, advanceVehicle, collidesWithActor, collidesWithVehicle, createVehicleStates,
   drivenVehicle, resolveInteractionVehicle, vehicleExitCandidates, vehicleProfile,
-} from "./vehicle-system.js?v=20261006-grenade-v9";
+} from "./vehicle-system.js?v=20261006-lan-v10";
 
 const TEAMS = [TEAM.SEAL, TEAM.TERROR];
 const randomItem = list => list[Math.floor(Math.random() * list.length)];

@@ -71,7 +71,7 @@ test("the main loop wires repositories, active-play timing, locale refresh, and 
   assert.match(main, /const dt = Math\.min\(\.05, elapsedSeconds\)/);
   assert.match(main, /visibilitychange[\s\S]*lastTime = performance\.now\(\)/);
   assert.match(main, /parentalView\.refreshLanguage\(t\)/);
-  assert.match(main, /addEventListener\("pagehide", \(\) => parentalControl\.flush\(\)\)/);
+  assert.match(main, /addEventListener\("pagehide", \(\) => \{[\s\S]*parentalControl\.flush\(\)[\s\S]*lanSession\?\.close/);
   assert.match(css, /\.parental-quiz-answers\s*\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(css, /@media \(max-width: 520px\)[\s\S]*\.parental-quiz-answers\s*\{grid-template-columns:1fr\}/);
   assert.match(css, /\.parental-quiz-option:focus-visible\{[^}]*outline:3px solid var\(--yellow\)/);

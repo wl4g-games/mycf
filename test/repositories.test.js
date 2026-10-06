@@ -35,6 +35,7 @@ class StorageEventTarget {
 }
 
 test("game setup repository validates every persisted deployment choice", () => {
+  assert.equal(normalizeGameSetup({ versionId: "lan" }).versionId, "lan");
   assert.deepEqual(normalizeGameSetup({
     versionId: "network",
     mapId: "wild",
