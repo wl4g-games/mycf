@@ -69,6 +69,51 @@ export function createGrenadeAudioCue(event, listener) {
   };
 }
 
+export class GrenadeThreatTracker {
+  constructor({ triggerDistance = 8, warningTtlMs = 6000, now = () => globalThis.performance?.now?.() ?? Date.now() } = {}) {
+    this.triggerDistance = triggerDistance;
+    this.warningTtlMs = warningTtlMs;
+    this.now = now;
+    this.warned = new Map();
+  }
+
+  reset() {
+    this.warned.clear();
+  }
+
+  mark(projectileId) {
+    if (!projectileId) return;
+    this.warned.set(projectileId, this.now() + this.warningTtlMs);
+  }
+
+  update(game) {
+    const listener = game?.player;
+    if (!listener?.alive || !Array.isArray(game?.projectiles)) return [];
+    const now = this.now();
+    for (const [projectileId, expiresAt] of this.warned) {
+      if (expiresAt <= now) this.warned.delete(projectileId);
+    }
+
+    const cues = [];
+    for (const projectile of game.projectiles) {
+      if (projectile?.type !== "grenade" || !projectile.id || !projectile.team || projectile.team === listener.team) continue;
+      const spatial = spatialize(projectile, listener, this.triggerDistance);
+      if (!spatial.audible || this.warned.has(projectile.id)) continue;
+      this.mark(projectile.id);
+      cues.push({
+        ...spatial,
+        projectileId: projectile.id,
+        relation: "enemy",
+        messageKey: "audio.grenadeIncoming",
+        priority: 2,
+        throwableId: projectile.throwableId || "firework",
+        incoming: true,
+      });
+    }
+    return cues.sort((left, right) => left.distance - right.distance);
+  }
+}
+
 export class SpatialFootstepTracker {
   constructor({ stride = .62, maxDistance = DEFAULT_FOOTSTEP_RANGE, teleportDistance = 2.2, maxVoices = 4 } = {}) {
     this.stride = stride;

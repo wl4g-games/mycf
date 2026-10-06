@@ -15,8 +15,10 @@ const randomItem = list => list[Math.floor(Math.random() * list.length)];
 
 function publicProjectile(projectile) {
   return {
+    id: projectile.id,
     type: projectile.type,
     throwableId: projectile.throwableId,
+    team: projectile.team,
     x: projectile.x,
     y: projectile.y,
     z: projectile.z,
@@ -68,6 +70,7 @@ export class AuthoritativeMatch {
     this.time = this.rules.timeLimit;
     this.score = { seal: 0, terror: 0 };
     this.actors = [];
+    this.projectileSequence = 0;
     this.projectiles = [];
     this.effects = [];
     this.feed = [];
@@ -139,6 +142,7 @@ export class AuthoritativeMatch {
         };
       })
       : [];
+    match.projectileSequence = Math.max(0, Number(state.projectileSequence) || 0);
     match.effects = Array.isArray(state.effects) ? state.effects.map(effect => ({ ...effect })) : [];
     match.feed = Array.isArray(state.feed) ? state.feed.map(entry => ({ ...entry })) : [];
     match.finished = Boolean(state.finished);
@@ -346,6 +350,7 @@ export class AuthoritativeMatch {
     if (actor.cooldown > 0) return;
     actor.cooldown = .62;
     const projectile = {
+      id: `${this.roomId}-grenade-${++this.projectileSequence}`,
       type: "grenade",
       throwableId: actor.throwableId || "firework",
       x: actor.x + Math.cos(actor.angle) * .45,
@@ -361,6 +366,7 @@ export class AuthoritativeMatch {
     this.projectiles.push(projectile);
     this.emit({
       type: "grenade_throw",
+      projectileId: projectile.id,
       actorId: actor.id,
       userId: actor.userId,
       team: actor.team,
@@ -655,6 +661,7 @@ export class AuthoritativeMatch {
       conditionId: this.rules.id,
       endsAt: this.endsAt,
       score: { ...this.score },
+      projectileSequence: this.projectileSequence,
       actors: this.actors.map(actor => ({ ...actor })),
       vehicles: this.vehicles.map(vehicle => ({ ...vehicle })),
       projectiles: this.projectiles.map(projectile => {

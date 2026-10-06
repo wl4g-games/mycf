@@ -45,8 +45,8 @@ Toon Strike is an original cartoon-style 3D H5 first-person shooter powered by a
   开局前可从两名男性与五名成年女性角色中选择。每张真人角色图都手持低姿待命武器，黑丝袜角色还具有勾丝、梯形脱线与小破洞细节；真人图像只出现在选择页与带呼吸动效的我方击杀前三领奖台，实际作战背包仍可独立选择，正式战斗中的所有角色仍为代码绘制的动画风格。
 - **Multiplayer rooms · 多人房间：** Register a unique callsign, see available online players, create a room, send invitations, accept or decline invitations, and view post-match rankings.<br>
   可注册唯一作战别名、查看可邀请的在线玩家、创建房间、发送邀请、接受或拒绝邀请，并在赛后查看排名。
-- **Spatial battlefield audio · 立体战场音效：** Distinct layered weapon reports include mechanical and recoil-body tails; the player's alternating steps span both stereo channels, nearby teammate and enemy footsteps pan by screen direction, and semantic voice cues warn about incoming and outgoing grenades.<br>
-  不同武器的分层声音包含机械作动与后坐尾音；玩家自己的左右脚步会在双声道间交替，附近队友和敌人的脚步会按屏幕方向定位，系统语音则会提示敌方来雷与我方投雷。
+- **Spatial battlefield audio · 立体战场音效：** Distinct layered weapon reports include mechanical and recoil-body tails; the player's alternating steps span both stereo channels, nearby teammate and enemy footsteps pan by screen direction, and an original packaged tactical recording reliably warns when an enemy grenade approaches. Browser speech remains a fallback if that asset cannot play and for other callouts.<br>
+  不同武器的分层声音包含机械作动与后坐尾音；玩家自己的左右脚步会在双声道间交替，附近队友和敌人的脚步会按屏幕方向定位；敌方手雷接近时由游戏内置的原创战术语音可靠预警，只有内置音频无法播放或执行其他呼喊时才使用浏览器语音作为后备。
 - **Combat feedback · 战斗反馈：** Every accepted firearm shot produces a visible trajectory beam, while bow shots use a distinct arrow trail; confirmed incoming hits use a red beam and damage flash. The top HUD shows both teams' total kills/deaths and the local player's kills/deaths.<br>
   每次有效枪械开火都会生成可见弹道光束，弓箭射击则使用独立箭矢轨迹；真正受伤时使用红色光束与受击闪光。屏幕顶部同时展示两队总击杀/阵亡和个人击杀/阵亡。
 - **Classic FPS presentation · 经典第一视角表现：** Every weapon family has its own two-handed viewmodel and movement animation. Firearms add accepted-shot recoil, muzzle flash, and crosshair flame, while bows and melee weapons use dedicated release or swing motion; scoped Barrett aiming hides the viewmodel.<br>

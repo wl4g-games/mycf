@@ -21,6 +21,7 @@ test("solo grenade throws emit relationship and trajectory metadata", () => {
   assert.deepEqual(throws.map(event => event.actorId), [game.player.id, enemy.id]);
   assert.deepEqual(throws.map(event => event.team), [game.player.team, enemy.team]);
   for (const event of throws) {
+    assert.match(event.projectileId, /^solo-\d+-grenade-\d+$/);
     assert.ok(Number.isFinite(event.from.x));
     assert.ok(Number.isFinite(event.from.y));
     assert.ok(Number.isFinite(event.to.x));
@@ -38,6 +39,7 @@ test("network grenade events relay unchanged to the presentation layer", () => {
   game.player = { id: "seal-0", team: "seal", x: 0, y: 0 };
   const event = {
     type: "grenade_throw",
+    projectileId: "ROOM1-grenade-3",
     actorId: "terror-0",
     userId: "human-2",
     team: "terror",

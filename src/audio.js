@@ -1,4 +1,7 @@
-import { SpatialFootstepTracker, createGrenadeAudioCue, spatialize } from "./audio-spatial.js?v=20261005-parental-v8";
+import { AudioCalloutPlayer } from "./audio-callout.js?v=20261006-grenade-v9";
+import {
+  GrenadeThreatTracker, SpatialFootstepTracker, createGrenadeAudioCue, spatialize,
+} from "./audio-spatial.js?v=20261006-grenade-v9";
 
 const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
 
@@ -165,13 +168,21 @@ export function createFootstepSoundPlan(relation = "enemy", side = "left") {
 }
 
 export class GameAudio {
-  constructor({ translate = key => key, locale = () => "en", footstepTracker = new SpatialFootstepTracker() } = {}) {
+  constructor({
+    translate = key => key,
+    locale = () => "en",
+    calloutPlayer = new AudioCalloutPlayer(),
+    footstepTracker = new SpatialFootstepTracker(),
+    grenadeThreatTracker = new GrenadeThreatTracker(),
+  } = {}) {
     this.context = null;
     this.master = null;
     this.noiseBuffer = null;
     this.translate = translate;
     this.locale = locale;
+    this.calloutPlayer = calloutPlayer;
     this.footstepTracker = footstepTracker;
+    this.grenadeThreatTracker = grenadeThreatTracker;
     this.lastCallouts = new Map();
   }
 
@@ -196,6 +207,7 @@ export class GameAudio {
           this.master.connect(this.context.destination);
         }
         this.createNoiseBuffer();
+        void this.calloutPlayer.preload(this.context);
       }
       if (this.context.state === "suspended") await this.context.resume();
       return this.context.state === "running";
@@ -385,7 +397,8 @@ export class GameAudio {
       if (cue.relation !== "enemy" || cue.incoming) this.grenadeSignal(cue);
     }
     if (cue.incoming && !cue.audible) this.grenadeSignal(cue);
-    if (cue.shouldSpeak) this.speakCallout(cue.messageKey, cue.priority);
+    if (cue.incoming) this.grenadeThreatTracker.mark(event?.projectileId);
+    if (cue.shouldSpeak) this.speakCallout(cue.messageKey, cue.priority, { pan: cue.pan });
     return cue;
   }
 
@@ -398,12 +411,25 @@ export class GameAudio {
     this.tone(520, .045, "sine", .018, 180, .03, cue.pan);
   }
 
-  speakCallout(messageKey, priority = 1) {
+  speakCallout(messageKey, priority = 1, { pan = 0 } = {}) {
     const now = Date.now();
     const cooldown = priority > 1 ? 900 : 1400;
     const previous = this.lastCallouts.get(messageKey) || 0;
     if (now - previous < cooldown) return false;
     this.lastCallouts.set(messageKey, now);
+    if (messageKey === "audio.grenadeIncoming") {
+      const queued = this.calloutPlayer.play(this.context, this.master, {
+        locale: this.locale(),
+        gain: 1,
+        pan: clamp(pan * .2, -.2, .2),
+        onFailure: () => this.speakSystemCallout(messageKey, priority),
+      });
+      if (queued) return true;
+    }
+    return this.speakSystemCallout(messageKey, priority);
+  }
+
+  speakSystemCallout(messageKey, priority = 1) {
     const speech = globalThis.speechSynthesis;
     const Utterance = globalThis.SpeechSynthesisUtterance;
     if (!speech || typeof Utterance !== "function") return false;
@@ -420,13 +446,18 @@ export class GameAudio {
   }
 
   updateWorld(game, dt) {
-    const cues = this.footstepTracker.update(game, dt);
-    for (const cue of cues) this.footstep(cue);
-    return cues;
+    const footsteps = this.footstepTracker.update(game, dt);
+    for (const cue of footsteps) this.footstep(cue);
+    for (const cue of this.grenadeThreatTracker.update(game)) {
+      this.grenadeSignal(cue);
+      this.speakCallout(cue.messageKey, cue.priority, { pan: cue.pan });
+    }
+    return footsteps;
   }
 
   resetWorld() {
     this.footstepTracker.reset();
+    this.grenadeThreatTracker.reset();
   }
 
   footstep(cue) {

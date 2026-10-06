@@ -2,13 +2,13 @@ import {
   BOT_NAMES, DEFAULT_CHARACTER_ID, DEFAULT_CONDITION_ID, GAME_MODES, LOADOUTS, MAPS, TEAM, THROWABLES, WEAPONS,
   botCharacterId, clamp, createMatchResult, distance, isSolid, normalizeAngle, resolveCharacterId,
   resolveMatchCondition, spawnCells,
-} from "./config.js?v=20261005-parental-v8";
-import { applyCameraPitch } from "./camera.js?v=20261005-parental-v8";
-import { createShotEvent } from "./shot-geometry.js?v=20261005-parental-v8";
+} from "./config.js?v=20261006-grenade-v9";
+import { applyCameraPitch } from "./camera.js?v=20261006-grenade-v9";
+import { createShotEvent } from "./shot-geometry.js?v=20261006-grenade-v9";
 import {
   ACTOR_COLLISION_RADIUS, advanceVehicle, collidesWithActor, collidesWithVehicle, createVehicleStates,
   drivenVehicle, resolveInteractionVehicle, vehicleExitCandidates, vehicleProfile,
-} from "./vehicle-system.js?v=20261005-parental-v8";
+} from "./vehicle-system.js?v=20261006-grenade-v9";
 
 const TEAMS = [TEAM.SEAL, TEAM.TERROR];
 const randomItem = list => list[Math.floor(Math.random() * list.length)];
@@ -45,6 +45,7 @@ export class GameState {
     this.hitMarker = 0;
     this.shake = 0;
     this.flash = 0;
+    this.projectileSequence = 0;
     this.projectiles = [];
     this.effects = [];
     this.feed = [];
@@ -237,6 +238,7 @@ export class GameState {
     if (actor.cooldown > 0) return;
     actor.cooldown = .62;
     const projectile = {
+      id: `solo-${this.round}-grenade-${++this.projectileSequence}`,
       type: "grenade",
       throwableId: actor.throwableId,
       x: actor.x + Math.cos(actor.angle) * .45,
@@ -252,6 +254,7 @@ export class GameState {
     this.projectiles.push(projectile);
     this.emit("grenade_throw", {
       type: "grenade_throw",
+      projectileId: projectile.id,
       actorId: actor.id,
       userId: actor.userId ?? null,
       team: actor.team,
