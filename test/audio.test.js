@@ -9,7 +9,9 @@ import {
   createMeleeSoundPlan,
   createWeaponSoundPlan,
 } from "../src/audio.js";
-import { SpatialFootstepTracker, createGrenadeAudioCue, spatialize } from "../src/audio-spatial.js";
+import {
+  GrenadeThreatTracker, SpatialFootstepTracker, createGrenadeAudioCue, spatialize,
+} from "../src/audio-spatial.js";
 
 test("weapon synthesis plans are original, layered, and distinct per weapon family", () => {
   const ids = ["barrett", "ak47", "policeMG", "whitePistol", "baike", "desertEagle", "dualPistols"];
@@ -67,6 +69,49 @@ test("grenade callouts distinguish own, friendly, and incoming throws", () => {
     createGrenadeThrowSoundPlan("firework").layers.map(layer => layer.role),
     ["pin", "pin", "lever", "throw"],
   );
+});
+
+test("packaged incoming callouts bypass optional browser speech synthesis", () => {
+  const calls = [];
+  const audio = new GameAudio({
+    locale: () => "zh-CN",
+    calloutPlayer: {
+      preload: async () => [],
+      play: (context, destination, options) => {
+        calls.push({ context, destination, options });
+        return true;
+      },
+    },
+  });
+  audio.context = { state: "running" };
+  audio.master = { id: "master" };
+
+  assert.equal(audio.speakCallout("audio.grenadeIncoming", 2, { pan: -.8 }), true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].options.locale, "zh-CN");
+  assert.ok(calls[0].options.pan < 0);
+});
+
+test("nearby enemy grenades trigger once even when their initial throw was not incoming", () => {
+  let now = 1000;
+  const tracker = new GrenadeThreatTracker({ triggerDistance: 8, now: () => now });
+  const player = { id: "seal-0", team: "seal", x: 0, y: 0, angle: 0, alive: true };
+  const enemy = { id: "g-enemy", type: "grenade", team: "terror", x: 6, y: -2, throwableId: "skull" };
+  const friendly = { id: "g-friendly", type: "grenade", team: "seal", x: 1, y: 0 };
+  const game = { player, projectiles: [enemy, friendly] };
+
+  const first = tracker.update(game);
+  assert.equal(first.length, 1);
+  assert.equal(first[0].projectileId, enemy.id);
+  assert.equal(first[0].messageKey, "audio.grenadeIncoming");
+  assert.ok(first[0].pan < 0);
+  assert.deepEqual(tracker.update(game), []);
+
+  tracker.reset();
+  tracker.mark(enemy.id);
+  assert.deepEqual(tracker.update(game), []);
+  now += 6001;
+  assert.equal(tracker.update(game).length, 1);
 });
 
 test("spatial footsteps include the local player and retain teammate or enemy identity", () => {

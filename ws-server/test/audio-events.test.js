@@ -17,6 +17,8 @@ test("authoritative grenade throws publish team, owner, and trajectory metadata"
   match.throwGrenade(actor);
 
   const event = events.find(item => item.type === "grenade_throw");
+  assert.equal(event.projectileId, match.projectiles[0].id);
+  assert.match(event.projectileId, /^AUDIO1-grenade-\d+$/);
   assert.equal(event.actorId, actor.id);
   assert.equal(event.userId, "human-1");
   assert.equal(event.team, actor.team);

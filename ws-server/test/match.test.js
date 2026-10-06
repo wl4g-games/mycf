@@ -134,6 +134,11 @@ test("versioned match state restores kills, ownership references and the absolut
   );
   assert.equal(restored.score.seal, 4);
   assert.equal(restored.projectiles[0].owner, restoredActor);
+  assert.equal(restored.projectiles[0].id, state.projectiles[0].id);
+  assert.equal(restored.snapshotFor("state-user").projectiles[0].team, restoredActor.team);
+  restoredActor.cooldown = 0;
+  restored.throwGrenade(restoredActor);
+  assert.notEqual(restored.projectiles[1].id, restored.projectiles[0].id);
   assert.ok(Math.abs(restored.time - 177.5) < .001);
   assert.deepEqual(restored.inputs.get("state-user"), {
     movement: { x: 1, y: -1 },

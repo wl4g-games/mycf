@@ -1,20 +1,20 @@
 import {
   CHARACTER_PROFILES, DEFAULT_CHARACTER_ID, DEFAULT_CONDITION_ID, LOADOUTS, MAPS, MATCH_CONDITIONS,
   MATCH_CONDITION_IDS, TEAM, THROWABLES, VEHICLE_TYPES, WEAPONS, alliedPodium, summarizeActorStats,
-} from "./config.js?v=20261005-parental-v8";
-import { GameAudio } from "./audio.js?v=20261005-parental-v8";
-import { fullscreenElement, supportsFullscreen, toggleFullscreen } from "./fullscreen.js?v=20261005-parental-v8";
-import { GameState } from "./game.js?v=20261005-parental-v8";
-import { applyDocumentTranslations, getLocale, onLocaleChange, t, toggleLocale } from "./i18n.js?v=20261005-parental-v8";
-import { InputController } from "./input.js?v=20261005-parental-v8";
-import { NetworkClient } from "./network.js?v=20261005-parental-v8";
-import { NetworkGameState } from "./network-game.js?v=20261005-parental-v8";
-import { ParentalControl } from "./parental/index.js?v=20261005-parental-v8";
-import { ParentalControlView } from "./parental/view.js?v=20261005-parental-v8";
-import { Renderer } from "./renderer.js?v=20261005-parental-v8";
-import { LocalGameSetupRepository } from "./repositories/game-setup-repository.js?v=20261005-parental-v8";
-import { LocalParentalControlRepository } from "./repositories/parental-control-repository.js?v=20261005-parental-v8";
-import { LocalRoomStateRepository } from "./repositories/room-state-repository.js?v=20261005-parental-v8";
+} from "./config.js?v=20261006-grenade-v9";
+import { GameAudio } from "./audio.js?v=20261006-grenade-v9";
+import { fullscreenElement, supportsFullscreen, toggleFullscreen } from "./fullscreen.js?v=20261006-grenade-v9";
+import { GameState } from "./game.js?v=20261006-grenade-v9";
+import { applyDocumentTranslations, getLocale, onLocaleChange, t, toggleLocale } from "./i18n.js?v=20261006-grenade-v9";
+import { InputController } from "./input.js?v=20261006-grenade-v9";
+import { NetworkClient } from "./network.js?v=20261006-grenade-v9";
+import { NetworkGameState } from "./network-game.js?v=20261006-grenade-v9";
+import { ParentalControl } from "./parental/index.js?v=20261006-grenade-v9";
+import { ParentalControlView } from "./parental/view.js?v=20261006-grenade-v9";
+import { Renderer } from "./renderer.js?v=20261006-grenade-v9";
+import { LocalGameSetupRepository } from "./repositories/game-setup-repository.js?v=20261006-grenade-v9";
+import { LocalParentalControlRepository } from "./repositories/parental-control-repository.js?v=20261006-grenade-v9";
+import { LocalRoomStateRepository } from "./repositories/room-state-repository.js?v=20261006-grenade-v9";
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => Array.from(document.querySelectorAll(selector));
