@@ -1,7 +1,7 @@
-import { AudioCalloutPlayer } from "./audio-callout.js?v=20261006-lan-v10";
+import { AudioCalloutPlayer } from "./audio-callout.js?v=20261008-grenade-v11";
 import {
   GrenadeThreatTracker, SpatialFootstepTracker, createGrenadeAudioCue, spatialize,
-} from "./audio-spatial.js?v=20261006-lan-v10";
+} from "./audio-spatial.js?v=20261008-grenade-v11";
 
 const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
 
@@ -398,7 +398,12 @@ export class GameAudio {
     }
     if (cue.incoming && !cue.audible) this.grenadeSignal(cue);
     if (cue.incoming) this.grenadeThreatTracker.mark(event?.projectileId);
-    if (cue.shouldSpeak) this.speakCallout(cue.messageKey, cue.priority, { pan: cue.pan });
+    if (cue.shouldSpeak) {
+      this.speakCallout(cue.voiceMessageKey || cue.messageKey, cue.priority, {
+        pan: cue.pan,
+        cooldownKey: cue.messageKey,
+      });
+    }
     return cue;
   }
 
@@ -411,12 +416,12 @@ export class GameAudio {
     this.tone(520, .045, "sine", .018, 180, .03, cue.pan);
   }
 
-  speakCallout(messageKey, priority = 1, { pan = 0 } = {}) {
+  speakCallout(messageKey, priority = 1, { pan = 0, cooldownKey = messageKey } = {}) {
     const now = Date.now();
     const cooldown = priority > 1 ? 900 : 1400;
-    const previous = this.lastCallouts.get(messageKey) || 0;
+    const previous = this.lastCallouts.get(cooldownKey) || 0;
     if (now - previous < cooldown) return false;
-    this.lastCallouts.set(messageKey, now);
+    this.lastCallouts.set(cooldownKey, now);
     if (messageKey === "audio.grenadeIncoming") {
       const queued = this.calloutPlayer.play(this.context, this.master, {
         locale: this.locale(),
