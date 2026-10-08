@@ -54,6 +54,7 @@ test("grenade callouts distinguish own, friendly, and incoming throws", () => {
     [own.relation, own.messageKey, ally.relation, ally.messageKey, enemy.relation, enemy.messageKey],
     ["self", "audio.grenadeOut", "ally", "audio.friendlyGrenadeOut", "enemy", "audio.grenadeIncoming"],
   );
+  assert.equal(own.voiceMessageKey, "audio.grenadeIncoming");
   assert.ok(ally.pan > 0);
   assert.ok(enemy.pan < 0);
   assert.equal(enemy.priority, 2);
@@ -90,6 +91,38 @@ test("packaged incoming callouts bypass optional browser speech synthesis", () =
   assert.equal(calls.length, 1);
   assert.equal(calls[0].options.locale, "zh-CN");
   assert.ok(calls[0].options.pan < 0);
+});
+
+test("own grenade throws use the packaged grenade warning instead of browser speech", () => {
+  const calls = [];
+  const audio = new GameAudio({
+    locale: () => "zh-CN",
+    calloutPlayer: {
+      preload: async () => [],
+      play: (context, destination, options) => {
+        calls.push({ context, destination, options });
+        return true;
+      },
+    },
+  });
+  audio.context = { state: "running" };
+  audio.master = { id: "master" };
+  audio.playPlan = () => {};
+  audio.tone = () => {};
+
+  const listener = { id: "seal-0", team: "seal", x: 0, y: 0, angle: 0 };
+  const cue = audio.grenadeThrow({
+    actorId: listener.id,
+    team: listener.team,
+    throwableId: "smoke",
+    from: { x: 0, y: 0 },
+    to: { x: 7, y: 0 },
+  }, listener);
+
+  assert.equal(cue.relation, "self");
+  assert.equal(cue.voiceMessageKey, "audio.grenadeIncoming");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].options.locale, "zh-CN");
 });
 
 test("nearby enemy grenades trigger once even when their initial throw was not incoming", () => {

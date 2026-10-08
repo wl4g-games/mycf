@@ -61,6 +61,7 @@ export function createGrenadeAudioCue(event, listener) {
     ...spatial,
     relation,
     messageKey: messageKeys[relation],
+    voiceMessageKey: relation === "self" ? "audio.grenadeIncoming" : messageKeys[relation],
     priority: relation === "enemy" ? 2 : 1,
     throwableId: event?.throwableId || "firework",
     incoming,

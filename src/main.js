@@ -1,23 +1,23 @@
 import {
   CHARACTER_PROFILES, DEFAULT_CHARACTER_ID, DEFAULT_CONDITION_ID, GAME_MODES, LOADOUTS, MAPS, MATCH_CONDITIONS,
   MATCH_CONDITION_IDS, TEAM, THROWABLES, VEHICLE_TYPES, WEAPONS, alliedPodium, summarizeActorStats,
-} from "./config.js?v=20261006-lan-v10";
-import { GameAudio } from "./audio.js?v=20261006-lan-v10";
-import { fullscreenElement, supportsFullscreen, toggleFullscreen } from "./fullscreen.js?v=20261006-lan-v10";
-import { GameState } from "./game.js?v=20261006-lan-v10";
-import { applyDocumentTranslations, getLocale, onLocaleChange, t, toggleLocale } from "./i18n.js?v=20261006-lan-v10";
-import { InputController } from "./input.js?v=20261006-lan-v10";
-import { LanClient } from "./lan/client.ts?v=20261006-lan-v10";
-import { LanHost } from "./lan/host.ts?v=20261006-lan-v10";
-import { LanQrScanner, renderLanQr } from "./lan/qr-signaling.ts?v=20261006-lan-v10";
-import { NetworkClient } from "./network.js?v=20261006-lan-v10";
-import { NetworkGameState } from "./network-game.js?v=20261006-lan-v10";
-import { ParentalControl } from "./parental/index.js?v=20261006-lan-v10";
-import { ParentalControlView } from "./parental/view.js?v=20261006-lan-v10";
-import { Renderer } from "./renderer.js?v=20261006-lan-v10";
-import { LocalGameSetupRepository } from "./repositories/game-setup-repository.js?v=20261006-lan-v10";
-import { LocalParentalControlRepository } from "./repositories/parental-control-repository.js?v=20261006-lan-v10";
-import { LocalRoomStateRepository } from "./repositories/room-state-repository.js?v=20261006-lan-v10";
+} from "./config.js?v=20261008-grenade-v11";
+import { GameAudio } from "./audio.js?v=20261008-grenade-v11";
+import { fullscreenElement, supportsFullscreen, toggleFullscreen } from "./fullscreen.js?v=20261008-grenade-v11";
+import { GameState } from "./game.js?v=20261008-grenade-v11";
+import { applyDocumentTranslations, getLocale, onLocaleChange, t, toggleLocale } from "./i18n.js?v=20261008-grenade-v11";
+import { InputController } from "./input.js?v=20261008-grenade-v11";
+import { LanClient } from "./lan/client.ts?v=20261008-grenade-v11";
+import { LanHost } from "./lan/host.ts?v=20261008-grenade-v11";
+import { LanQrScanner, renderLanQr } from "./lan/qr-signaling.ts?v=20261008-grenade-v11";
+import { NetworkClient } from "./network.js?v=20261008-grenade-v11";
+import { NetworkGameState } from "./network-game.js?v=20261008-grenade-v11";
+import { ParentalControl } from "./parental/index.js?v=20261008-grenade-v11";
+import { ParentalControlView } from "./parental/view.js?v=20261008-grenade-v11";
+import { Renderer } from "./renderer.js?v=20261008-grenade-v11";
+import { LocalGameSetupRepository } from "./repositories/game-setup-repository.js?v=20261008-grenade-v11";
+import { LocalParentalControlRepository } from "./repositories/parental-control-repository.js?v=20261008-grenade-v11";
+import { LocalRoomStateRepository } from "./repositories/room-state-repository.js?v=20261008-grenade-v11";
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => Array.from(document.querySelectorAll(selector));

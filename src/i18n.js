@@ -1,5 +1,5 @@
-import { en } from "./locales/en.js?v=20261006-lan-v10";
-import { zhCN } from "./locales/zh-CN.js?v=20261006-lan-v10";
+import { en } from "./locales/en.js?v=20261008-grenade-v11";
+import { zhCN } from "./locales/zh-CN.js?v=20261008-grenade-v11";
 
 const STORAGE_KEY = "toon-strike.locale";
 const locales = Object.freeze({ en, "zh-CN": zhCN });

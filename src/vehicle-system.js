@@ -1,1 +1,1 @@
-export * from "../ws-server/src/vehicle-system.js?v=20261006-lan-v10";
+export * from "../ws-server/src/vehicle-system.js?v=20261008-grenade-v11";

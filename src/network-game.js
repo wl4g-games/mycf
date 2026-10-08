@@ -1,12 +1,12 @@
 import {
   DEFAULT_CHARACTER_ID, GAME_MODES, LOADOUTS, MAPS, MATCH_TIME, TEAM, THROWABLES, WEAPONS,
   distance, isSolid, normalizeAngle, resolveCharacterId, resolveMatchCondition, spawnCells,
-} from "./config.js?v=20261006-lan-v10";
-import { applyCameraPitch } from "./camera.js?v=20261006-lan-v10";
+} from "./config.js?v=20261008-grenade-v11";
+import { applyCameraPitch } from "./camera.js?v=20261008-grenade-v11";
 import {
   ACTOR_COLLISION_RADIUS, collidesWithVehicle, createVehicleStates, drivenVehicle,
   resolveInteractionVehicle,
-} from "./vehicle-system.js?v=20261006-lan-v10";
+} from "./vehicle-system.js?v=20261008-grenade-v11";
 
 export class NetworkGameState {
   constructor(client, audio, emit = () => {}) {
