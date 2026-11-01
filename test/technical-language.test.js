@@ -9,7 +9,10 @@ const simplifiedChineseCatalog = new Set([
   "src/locales/parental-zh-CN.js",
   "src/locales/zh-CN.js",
 ]);
-const bilingualReadme = "README.md";
+const approvedChineseDocuments = new Set([
+  "README.md",
+  "docs/architecture/OVERVIEW_CN.md",
+]);
 const ignoredDirectories = new Set([".git", "assets", "dist", "node_modules"]);
 const chineseCharacters = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/u;
 const localizedMessageLine = /^\s*(?:nativeName|"[A-Za-z0-9_.-]+"):\s*"(?:[^"\\]|\\.)*",?\s*$/u;
@@ -25,7 +28,7 @@ function sourceFiles(directory) {
   return files;
 }
 
-test("Chinese characters are limited to UI localization and the bilingual root README", () => {
+test("Chinese characters are limited to UI localization and approved user documentation", () => {
   const violations = [];
   let localizedLineCount = 0;
   for (const file of sourceFiles(root)) {
@@ -34,7 +37,7 @@ test("Chinese characters are limited to UI localization and the bilingual root R
     if (content.includes(0)) continue;
     content.toString("utf8").split("\n").forEach((line, index) => {
       if (!chineseCharacters.test(line)) return;
-      if (projectPath === bilingualReadme) return;
+      if (approvedChineseDocuments.has(projectPath)) return;
       if (simplifiedChineseCatalog.has(projectPath) && localizedMessageLine.test(line)) {
         localizedLineCount += 1;
         return;
