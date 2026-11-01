@@ -144,13 +144,16 @@ This MVP targets devices on the same reachable Wi-Fi/LAN and intentionally provi
 
 ## Language policy · 语言规范
 
-Player-facing Chinese text is centralized in the exact Simplified Chinese catalogs under `src/locales/`, while stable message keys, protocol codes, source code, configuration, CI output, logs, and tests remain English. The root README is intentionally bilingual for users and contributors; the rest of the technical documentation remains English.
+Player-facing Chinese text is centralized in the exact Simplified Chinese catalogs under `src/locales/`, while stable message keys, protocol codes, source code, configuration, CI output, logs, and tests remain English. The root README is intentionally bilingual, and the architecture overview has one explicitly approved Chinese edition; other technical documents remain English.
 
-面向玩家的中文文案集中保存在 `src/locales/` 下明确的简体中文语言文件中，稳定消息键、协议码、源代码、配置、CI 输出、日志与测试均保持英文。根目录 README 为方便用户与贡献者而特意采用中英双语，其余技术文档仍保持英文。
+面向玩家的中文文案集中保存在 `src/locales/` 下明确的简体中文语言文件中，稳定消息键、协议码、源代码、配置、CI 输出、日志与测试均保持英文。根目录 README 特意采用中英双语，架构总览另有一份明确获准的中文版；其他技术文档仍保持英文。
 
-Automated tests require the English and Simplified Chinese catalogs to expose identical non-empty keys and matching placeholders. Another source-text guard rejects Chinese characters outside the Simplified Chinese UI catalog and this bilingual README.
+Automated tests require the English and Simplified Chinese catalogs to expose identical non-empty keys and matching placeholders. Another source-text guard rejects Chinese characters outside the Simplified Chinese UI catalog and the two explicitly approved user documents.
 
-自动测试要求英文与简体中文语言目录具有完全一致的非空键和占位符。另一项源码文本守卫会拒绝出现在简体中文 UI 语言文件与本双语 README 之外的中文字符。
+自动测试要求英文与简体中文语言目录具有完全一致的非空键和占位符。另一项源码文本守卫会拒绝出现在简体中文 UI 语言文件与两份明确获准的用户文档之外的中文字符。
+
+Architecture and implementation handover documents are available in [English](docs/architecture/OVERVIEW.md), [Chinese](docs/architecture/OVERVIEW_CN.md), and the [Coding Agent handover](docs/development/HARDCOVER.md).<br>
+架构与实现交接文档包括[英文架构总览](docs/architecture/OVERVIEW.md)、[中文架构总览](docs/architecture/OVERVIEW_CN.md)以及 [Coding Agent 交接文档](docs/development/HARDCOVER.md)。
 
 ## Client repositories · 客户端数据仓库
 
