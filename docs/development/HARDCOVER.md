@@ -23,6 +23,73 @@ The root frontend intentionally imports browser-safe canonical rules from
 `vehicle-system.js` depend on Node-only modules without first separating their
 shared browser domain.
 
+### 1.1 Current production access and deployment ledger
+
+This section is an operational snapshot, not immutable design. The next agent
+must refresh the verification time, revision, endpoints, cache backend, and
+deployment owner whenever production topology changes.
+
+Last verified: **2026-11-01, Asia/Shanghai**.
+
+| Purpose | Current address or identifier | Verified behavior |
+| --- | --- | --- |
+| Player frontend | `https://wl4g-games.github.io/mycf/` | HTTP 200; GitHub Pages workflow deployment |
+| Online service base | `https://mycf.wl4g.com` | Server-only custom Vercel domain; `/` intentionally returns 404 |
+| Online health | `https://mycf.wl4g.com/health` | HTTP 200 with `ok: true` |
+| Online WebSocket | `wss://mycf.wl4g.com/ws` | Endpoint embedded by the production Pages bundle |
+| Vercel provider alias | `https://mycf-wl4g-games.vercel.app` | Server-only fallback/diagnostic alias; `/health` returns 200 |
+| Source repository | `https://github.com/wl4g-games/mycf` | Canonical Git repository |
+| Current release | `https://github.com/wl4g-games/mycf/releases/tag/v1.10.1` | Production revision `6f528b4bb3f360fa47168c3c4530f53f8a9d8255` |
+| Release workflow run | `https://github.com/wl4g-games/mycf/actions/runs/37769919144` | Release, Pages, server validation, and GHCR image succeeded |
+| Container image | `ghcr.io/wl4g-games/mycf:v1.10.1` and `ghcr.io/wl4g-games/mycf:latest` | Published by the successful release workflow |
+
+Current configuration and ownership observations:
+
+- repository variable `MYCF_WS_URL` is `https://mycf.wl4g.com`;
+- the live Pages JavaScript bundle contains that custom endpoint and not the
+  provider alias;
+- both health endpoints report `cache.backend: "memory"`, so Redis is **not**
+  enabled in the current production service;
+- the production Vercel deployment for the current revision was created by
+  Vercel's Git integration;
+- the release workflow's `Deploy WebSocket server to Vercel` job was skipped
+  because `VERCEL_DEPLOY_ENABLED` was not configured;
+- do not enable Actions-owned Vercel deployment while automatic Vercel Git
+  production deployment is active, or one merge can deploy twice.
+
+The custom domain's DNS and Vercel domain binding are external configuration,
+not repository state. The custom domain should remain the client-facing value;
+the provider alias is useful only for diagnosis or emergency fallback. Do not
+publish `/` as a game URL for either server hostname because the service owns
+only `/health` and `/ws`.
+
+Local development addresses are:
+
+| Purpose | Default address |
+| --- | --- |
+| Vite frontend | `http://127.0.0.1:5173/` |
+| Standalone server health | `http://127.0.0.1:8787/health` |
+| Standalone WebSocket | `ws://127.0.0.1:8787/ws` |
+
+Refresh this ledger with read-only checks before relying on it:
+
+```bash
+curl -fsSI https://wl4g-games.github.io/mycf/
+curl -fsS https://mycf.wl4g.com/health
+node ws-server/scripts/smoke-deployment.mjs \
+  https://mycf.wl4g.com https://wl4g-games.github.io
+gh api repos/wl4g-games/mycf/pages
+gh variable get MYCF_WS_URL
+gh run list --workflow release.yml --limit 3
+gh release view
+```
+
+Use `HTTPS_PROXY=http://127.0.0.1:8800` for HTTP checks when direct access is
+affected by GFW. The smoke script itself does not currently implement proxy
+transport, so use a browser/proxy-aware WebSocket probe when direct Node.js
+network access is blocked. Never print Vercel tokens, Redis credentials, or
+other secret values into this document or CI logs.
+
 ## 2. Non-negotiable invariants
 
 1. **Pages is static only.** Release CI uploads only root `dist/` to GitHub
