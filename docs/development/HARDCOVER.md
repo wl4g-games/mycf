@@ -8,9 +8,13 @@ before making structural changes.
 
 ## 1. Baseline and source of truth
 
-The document was first verified against `main` at release `v1.10.1`. Treat the
-current source and tests as authoritative if a later release differs, and
-update this document in the same change that alters an architectural boundary.
+This document was re-audited on **2026-11-01, Asia/Shanghai** against
+`origin/main` release `v1.10.1` (`6f528b4`) and the open documentation branch
+`docs/architecture-handover`. The audit found no architectural code violation
+that justified a runtime change; the alignment corrections were documentation
+only. Treat current source and tests as authoritative if a later release
+differs, and update this document in the same change that alters an
+architectural boundary.
 
 The repository contains two installable projects:
 
@@ -90,6 +94,77 @@ transport, so use a browser/proxy-aware WebSocket probe when direct Node.js
 network access is blocked. Never print Vercel tokens, Redis credentials, or
 other secret values into this document or CI logs.
 
+### 1.2 New-machine migration checklist
+
+At the last audit, architecture documentation is still carried by open
+[PR #15](https://github.com/wl4g-games/mycf/pull/15):
+
+| Field | Audited value |
+| --- | --- |
+| Base | `main` at `6f528b4` / `v1.10.1` |
+| Head | `docs/architecture-handover` |
+| PR state | Open, mergeable, review required |
+| Automated checks | Successful at the audit time |
+
+Refresh the PR before acting because review and merge state can change. On a
+fresh machine, use one of these two paths:
+
+```bash
+git clone git@github.com:wl4g-games/mycf.git
+cd mycf
+gh pr view 15
+
+# Continue the unmerged handover branch:
+git fetch origin
+git switch --create docs/architecture-handover \
+  --track origin/docs/architecture-handover
+
+# Or, after PR #15 is merged, use the released integration branch:
+git switch main
+git pull --ff-only origin main
+```
+
+Install reproducibly from both lockfiles and establish a clean baseline:
+
+```bash
+HTTPS_PROXY=http://127.0.0.1:8800 npm ci
+HTTPS_PROXY=http://127.0.0.1:8800 npm ci --prefix ws-server
+npm test
+npm test --prefix ws-server
+npm run check
+VITE_MYCF_WS_URL=https://mycf.wl4g.com npm run build -- --base=/mycf/
+git status --short --branch
+```
+
+Use Node.js 22; the frontend manifest also supports Node `20.19+`, but the
+server manifest and CI standardize on Node 22. Do not migrate `node_modules/`,
+`dist/`, `.vercel/`, `.env*`, tokens, or Redis credentials between machines.
+They are generated output or machine-local secrets. The tracked source, two
+lockfiles, Git history, and this handover are sufficient to reconstruct the
+workspace.
+
+External state is not reconstructed by Git. Recheck the GitHub
+`MYCF_WS_URL` variable, Pages source, Vercel project root (`ws-server`), custom
+domain binding, deployment owner, Redis environment, and live `/health`
+response after migration. The current production service reports the
+`memory` cache backend, so do not assume Redis is enabled.
+
+### 1.3 Architecture-to-source audit result
+
+| Area | Source of truth | Result |
+| --- | --- | --- |
+| Mode authority | `GameState`, `AuthoritativeMatch`, `LanHost` | Solo, online, and LAN ownership matches both architecture overviews |
+| Shared rules | root re-exports from `ws-server/src/` | Browser-safe config, match rules/results, shot geometry, and vehicle rules are canonical |
+| Client storage | `src/repositories/` | Setup and parent state use validated local storage; room projection is deliberately memory-only |
+| Online persistence | `GameStateStore` and `PersistenceQueue` | Write-side checkpoints exist; startup restore, resume, and multi-instance authority do not |
+| LAN transport | `src/lan/` | Complete host-only ICE QR signaling, two channels, host authority, AI fill, and 20 Hz snapshots match the design |
+| Delivery | `.github/workflows/` | PR validates both projects and builds only the frontend; `main` builds release, Pages, and GHCR, with optional Vercel deploy |
+
+No runtime source was changed by this audit. Documentation now explicitly
+separates online cache persistence from non-persistent LAN state, distinguishes
+server validation from a PR container build, and records the missing browser
+and multi-device automated E2E coverage.
+
 ## 2. Non-negotiable invariants
 
 1. **Pages is static only.** Release CI uploads only root `dist/` to GitHub
@@ -149,7 +224,7 @@ other secret values into this document or CI logs.
 - Packaged bilingual grenade warning with speech fallback.
 - Team and personal K/D HUD, kill feed, allied top-three podium, and full
   ranking modal.
-- Fullscreen and confirmed solo restart/online exit controls.
+- Fullscreen plus confirmed solo restart or online/LAN room-exit controls.
 
 ### 3.3 Solo mode
 
@@ -209,8 +284,9 @@ other secret values into this document or CI logs.
 
 ### 3.8 Delivery
 
-- PR CI installs, tests, checks, and builds both projects and maintains one
-  sticky English status comment.
+- PR CI installs and tests both projects, runs strict LAN type checks and
+  JavaScript syntax checks, builds the root Vite frontend, and maintains one
+  sticky English status comment. It does not build a server container.
 - Main release computes semantic version, publishes a deterministic frontend
   archive and GitHub Release, deploys Pages, validates the server, and pushes
   an amd64 GHCR image.
@@ -245,7 +321,13 @@ action ID.
 Match timers are 180/300/480/720 seconds and can finish earlier at the kill
 target. Vercel measures duration from connection establishment, so lobby time
 also consumes the invocation lifetime. Redis checkpoint writes alone do not
-solve the closure.
+solve the closure. The tracked `ws-server/vercel.json` enables Fluid compute
+but does not set `maxDuration`, so the project/dashboard default applies. At
+the current Hobby default of 300 seconds, the 5/8/12-minute presets cannot be
+assumed to complete on one connection, especially after lobby time. Recheck
+the current plan and
+[official Vercel duration limits](https://vercel.com/docs/functions/configuring-functions/duration)
+before changing this constraint.
 
 ### 4.4 LAN capacity is not a performance guarantee
 
@@ -265,6 +347,32 @@ range, and 2D line of sight. Do not describe the current combat model as full
 
 There is no parent PIN, server policy, account binding, or tamper resistance.
 Clearing browser data resets it.
+
+### 4.7 Automated browser and device E2E is absent
+
+The suites cover domain behavior, UI/source contracts, strict LAN TypeScript,
+build boundaries, and a real Node WebSocket runtime. They do not launch
+Chromium/WebKit, drive the rendered game, scan with a real phone camera, or
+pair multiple real browsers over WebRTC. iOS Chrome/Safari startup, touch,
+audio-unlock, QR camera permissions, full-screen behavior, and realistic LAN
+capacity therefore remain manual release checks.
+
+### 4.8 Identity and LAN pairing are intentionally weak
+
+Online identity is a per-socket connection ID plus a unique in-memory alias;
+there is no account authentication, durable identity, or resume credential.
+LAN QR payloads are versioned and expire after ten minutes, but have no PIN or
+application signature. Do not expose either mode as authenticated or
+tamper-resistant multiplayer.
+
+### 4.9 Development dependency audit finding
+
+On 2026-11-01, `npm audit --omit=dev` was clean for both projects. A full root
+audit reported one high aggregate advisory against the pinned development-only
+Vite `7.3.6`; npm identified `7.3.7` as the non-major fix. The deployed static
+bundle and production dependencies are not affected, but the next dependency
+maintenance change should update Vite and its lockfile, rerun the full suite,
+and verify the Pages build. Do not hide the finding with an audit exception.
 
 ## 5. Prioritized enhancement roadmap
 
@@ -450,6 +558,8 @@ npm test
 npm test --prefix ws-server
 npm run check
 VITE_MYCF_WS_URL=https://mycf.wl4g.com npm run build -- --base=/mycf/
+npm audit --omit=dev
+npm audit --omit=dev --prefix ws-server
 git diff --check
 ```
 

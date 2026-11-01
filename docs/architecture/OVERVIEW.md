@@ -50,13 +50,16 @@ The browser-side `NetworkGameState` is deliberately transport-neutral. It can
 consume snapshots and reliable events from either `NetworkClient` or a LAN
 session object. This keeps online and LAN presentation behavior aligned.
 
+The cache branch in the diagram applies only to the online service. LAN rooms
+and matches live only in the host browser and are lost when that host closes.
+
 ## 3. Deployment topology
 
 ```text
 Pull request
   -> install root and ws-server dependencies
   -> frontend tests + server tests + syntax/type checks
-  -> Vite static build validation
+  -> Vite frontend static-build validation
 
 Merge to main
   -> Vite dist archive -> GitHub Release
@@ -402,6 +405,12 @@ TypeScript is used for strict checking of the LAN modules. The server has an
 independent Node test suite for lobby, match, geometry, cache, persistence,
 access policy, and real WebSocket runtime behavior.
 
+The PR workflow builds only the root Vite frontend artifact. It installs,
+tests, and syntax-checks `ws-server`, but a production server container is
+built only after a merge to `main`. There is currently no Playwright/WebKit
+suite or automated multi-device LAN test; mobile Safari/Chrome, camera QR, and
+real WebRTC pairing still require manual device validation.
+
 Primary validation commands are:
 
 ```bash
@@ -422,6 +431,9 @@ git diff --check
   capacity, not a guarantee that every mobile host can sustain 31 peers.
 - Account login, matchmaking, spectators, replay, voice chat, and persistent
   player progression are not implemented.
+- Browser automation and multi-device mobile/LAN E2E are not implemented; the
+  current suites are unit, domain, protocol, build-boundary, and Node runtime
+  tests.
 - Aiming pitch changes presentation, but authoritative hit selection remains a
   2D yaw/range/line-of-sight calculation.
 - Solo and authoritative match implementations still duplicate parts of AI,
