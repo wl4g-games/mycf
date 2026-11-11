@@ -201,7 +201,7 @@ export class LanHost extends LanEventEmitter {
     return true;
   }
 
-  sendInput(input: { movement?: LanInputMessage["move"]; angle?: number; fireHeld?: boolean; actions?: LanInputMessage["actions"] }): boolean {
+  sendInput(input: { movement?: LanInputMessage["move"]; angle?: number; pitch?: number; fireHeld?: boolean; actions?: LanInputMessage["actions"] }): boolean {
     if (!this.match) return false;
     this.match.setInput(this.self.id, input);
     return true;
@@ -276,6 +276,7 @@ export class LanHost extends LanEventEmitter {
     this.match?.setInput(record.profile.id, {
       movement: message.move,
       angle: message.aim.angle,
+      pitch: message.aim.pitch,
       fireHeld: message.fire,
       actions: message.actions,
     });

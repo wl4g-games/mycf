@@ -38,7 +38,19 @@ const forceCancelButton = $("#force-cancel");
 const forceConfirmButton = $("#force-confirm");
 const audio = new GameAudio({ translate: t, locale: getLocale });
 const input = new InputController(canvas);
-const renderer = new Renderer(canvas, $("#radar"));
+let renderer;
+try {
+  renderer = new Renderer(canvas, $("#radar"));
+} catch (error) {
+  $("#render-error").classList.remove("is-hidden");
+  $("#render-error-copy").textContent = t("render.unsupported");
+  throw error;
+}
+canvas.addEventListener("render-status", event => {
+  $("#render-error").classList.toggle("is-hidden", event.detail.state === "ready");
+  $("#render-error-copy").textContent = t("render.contextLost");
+  if (event.detail.state === "lost") { pauseBattle(); exitPointerLock(); }
+});
 const setupRepository = new LocalGameSetupRepository();
 const roomStateRepository = new LocalRoomStateRepository();
 const parentalStateRepository = new LocalParentalControlRepository();
@@ -1090,7 +1102,9 @@ function frame(now) {
   lanSession?.tick(elapsedSeconds);
   if (!paused) game.update(dt, { ...state, items: forwarded });
   if (game.started) audio.updateWorld(game, paused ? 0 : dt);
-  renderer.render(game, paused ? 0 : dt);
+  renderer.setPreviewMap(selected.mapId);
+  renderer.render(game, paused ? 0 : dt, { preview: !landing.classList.contains("is-hidden"), frameTime: elapsedSeconds });
+  $("#damage-overlay").style.opacity = String(Math.min(.65, game.flash || 0));
   if (game.started) updateHud(dt);
   requestAnimationFrame(frame);
 }

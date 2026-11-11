@@ -1,867 +1,220 @@
-import {
-  CHARACTER_PROFILES, DEFAULT_CHARACTER_ID, FOV, MAPS, SCOPED_FOV, TEAM, THROWABLES,
-  clamp, normalizeAngle, resolveCharacterId, tileAt,
-} from "./config.js?v=20261008-grenade-v11";
-import { MotionTracker, gaitPose } from "./render-animation.js?v=20261008-grenade-v11";
-import { WeaponViewmodel } from "./weapon-viewmodel.js?v=20261008-grenade-v11";
-import { cameraHorizon } from "./camera.js?v=20261008-grenade-v11";
-import { CombatTracerSystem } from "./combat-tracer.js?v=20261008-grenade-v11";
+import * as THREE from "three";
+import { EffectComposer, EffectPass, RenderPass, SMAAEffect, BloomEffect, ToneMappingEffect, ToneMappingMode } from "postprocessing";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { FOV, SCOPED_FOV, MAPS, clamp } from "./config.js";
+import { MotionTracker } from "./render-animation.js";
+import { RenderResources, WORLD_SCALE as S, EYE_HEIGHT } from "./three/resources.js";
+import { Battlefield } from "./three/world.js";
+import { SoldierModel, VehicleModel } from "./three/models.js";
+import { FirstPersonWeapon } from "./three/viewmodel.js";
+import { BattlefieldEffects } from "./three/effects.js";
+import { ModelBatch } from "./three/model-batch.js";
+import { drawRadar } from "./three/radar.js";
 
-const TEAM_COLORS = {
-  seal: { main: "#2ca9df", shade: "#155d91", light: "#75dcff", gear: "#17394f" },
-  terror: { main: "#ef654d", shade: "#8f2f38", light: "#ffad62", gear: "#51322d" },
-};
-
-const MAP_BACKGROUNDS = Object.freeze({
-  city: new URL("../assets/toon-city.png", import.meta.url).href,
-  wild: new URL("../assets/toon-wild.png", import.meta.url).href,
-});
-
-function roundedPath(ctx, x, y, width, height, radius) {
-  const r = Math.min(radius, Math.abs(width) / 2, Math.abs(height) / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + width - r, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
-  ctx.lineTo(x + width, y + height - r);
-  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
-  ctx.lineTo(x + r, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-}
-
-const hash = (x, y) => {
-  const value = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
-  return value - Math.floor(value);
-};
+export { getActorRenderProfile } from "./three/models.js";
 
 export function getVehicleRenderState(game) {
   const vehicles = game.vehicles || (game.tank ? [game.tank] : []);
-  const ownVehicle = vehicles.find(vehicle => vehicle.driverId === game.player?.id) || null;
-  return {
-    vehicles,
-    ownVehicle,
-    driverIds: new Set(vehicles.map(vehicle => vehicle.driverId).filter(Boolean)),
-  };
+  return { vehicles, ownVehicle: vehicles.find(vehicle => vehicle.driverId === game.player?.id) || null, driverIds: new Set(vehicles.map(vehicle => vehicle.driverId).filter(Boolean)) };
 }
 
-export function getActorRenderProfile(characterId) {
-  return CHARACTER_PROFILES[resolveCharacterId(characterId)] || CHARACTER_PROFILES[DEFAULT_CHARACTER_ID];
+export function verticalFov(horizontalFov, aspect) {
+  return THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(horizontalFov / 2) / Math.max(.1, aspect)));
 }
 
 export class Renderer {
   constructor(canvas, radar) {
     this.canvas = canvas;
-    this.context = canvas.getContext("2d", { alpha: false });
     this.radar = radar;
-    this.radarContext = radar.getContext("2d");
-    this.width = 0;
-    this.height = 0;
-    this.depth = new Float32Array(1);
-    this.backdropCache = new Map();
+    this.resources = new RenderResources();
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color("#9aafb3");
+    this.scene.fog = new THREE.FogExp2("#9aafb3", .006);
+    this.camera = new THREE.PerspectiveCamera(60, 1, .045, 400);
+    this.camera.rotation.order = "YXZ";
+    this.webgl = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: "high-performance" });
+    this.webgl.outputColorSpace = THREE.SRGBColorSpace;
+    this.webgl.toneMapping = THREE.NoToneMapping;
+    this.webgl.shadowMap.enabled = true;
+    this.webgl.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.webgl.info.autoReset = false;
+    this.refreshEnvironment();
+    this.scene.add(new THREE.HemisphereLight(0xd2e3ed, 0x64634d, 2));
+    this.sun = new THREE.DirectionalLight(0xffdfb1, 3.5);
+    this.sun.position.set(-35, 65, 30);
+    this.sun.castShadow = true;
+    this.sun.shadow.mapSize.set(2048, 2048);
+    Object.assign(this.sun.shadow.camera, { left: -32, right: 32, top: 32, bottom: -32, near: 1, far: 150 });
+    this.sun.shadow.bias = -.00025;
+    this.sun.shadow.normalBias = .025;
+    this.scene.add(this.sun, this.sun.target);
+    this.composer = new EffectComposer(this.webgl, { frameBufferType: THREE.HalfFloatType, multisampling: 0 });
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.composer.addPass(new EffectPass(this.camera,
+      new SMAAEffect(),
+      new BloomEffect({ intensity: .15, luminanceThreshold: 1.4, mipmapBlur: true, resolutionScale: .5 }),
+      new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC }),
+    ));
+    this.viewmodel = new FirstPersonWeapon(this.resources);
+    this.viewmodel.scene.environment = this.environment.texture;
+    this.viewmodel.scene.environmentIntensity = .8;
+    this.effects = new BattlefieldEffects(this.scene, this.resources);
     this.motionTracker = new MotionTracker();
-    this.weaponViewmodel = new WeaponViewmodel();
-    this.combatTracers = new CombatTracerSystem();
-    this.animationTime = 0;
-    this.backgrounds = {};
-    Object.values(MAPS).forEach(map => {
-      const image = new Image();
-      image.decoding = "async";
-      image.src = MAP_BACKGROUNDS[map.id];
-      this.backgrounds[map.id] = image;
-    });
+    this.actors = new Map(); this.vehicles = new Map();
+    this.modelBatch = new ModelBatch();
+    this.scene.add(this.modelBatch.root);
+    this.raycaster = new THREE.Raycaster();
+    this.raycaster.firstHitOnly = true;
+    this.forward = new THREE.Vector3();
+    this.sunOffset = new THREE.Vector3(-35, 65, 30);
+    this.animationTime = this.radarClock = this.sampleTime = this.sampleFrames = 0;
+    this.pixelScale = 1;
+    this.lowPerformanceSamples = this.highPerformanceSamples = 0;
+    this.previewMapId = "city";
+    this.onResize = () => this.resize();
+    this.onContextLost = event => { event.preventDefault(); this.contextLost = true; this.canvas.dispatchEvent(new CustomEvent("render-status", { detail: { state: "lost" } })); };
+    this.onContextRestored = () => { this.refreshEnvironment(); this.contextLost = false; this.resize(); this.canvas.dispatchEvent(new CustomEvent("render-status", { detail: { state: "ready" } })); };
+    canvas.addEventListener("webglcontextlost", this.onContextLost);
+    canvas.addEventListener("webglcontextrestored", this.onContextRestored);
+    window.addEventListener("resize", this.onResize);
     this.resize();
-    window.addEventListener("resize", () => this.resize());
   }
 
   resize() {
-    const density = Math.min(devicePixelRatio || 1, innerWidth < 900 ? 1.05 : 1.25);
-    const ratio = density * (innerWidth > 1000 ? .7 : .88);
-    const width = Math.round(innerWidth * ratio);
-    const height = Math.round(innerHeight * ratio);
-    if (width === this.width && height === this.height) return;
-    this.canvas.width = this.width = width;
-    this.canvas.height = this.height = height;
-    this.depth = new Float32Array(width);
-    this.backdropCache.clear();
+    const width = Math.max(1, this.canvas.clientWidth || innerWidth), height = Math.max(1, this.canvas.clientHeight || innerHeight);
+    this.width = width; this.height = height;
+    this.webgl.setPixelRatio(Math.min(devicePixelRatio || 1, width < 900 ? 1.25 : 1.5) * this.pixelScale);
+    this.webgl.setSize(width, height, false);
+    this.composer.setSize(width, height);
+    this.camera.aspect = width / height;
+    this.camera.updateProjectionMatrix();
   }
 
-  render(game, dt = 0) {
-    if (!game.player || !game.map) return;
-    const animationDelta = clamp(Number(dt) || 0, 0, .05);
-    this.animationTime += animationDelta;
-    this.weaponViewmodel.advance(animationDelta);
-    this.combatTracers.advance(animationDelta);
-    const actorIds = new Set();
+  refreshEnvironment() {
+    const pmrem = new THREE.PMREMGenerator(this.webgl);
+    const room = new RoomEnvironment();
+    this.environment?.dispose();
+    this.environment = pmrem.fromScene(room, .04);
+    this.scene.environment = this.environment.texture;
+    this.scene.environmentIntensity = .4;
+    if (this.viewmodel) this.viewmodel.scene.environment = this.environment.texture;
+    room.dispose(); pmrem.dispose();
+  }
+
+  setPreviewMap(mapId) { this.previewMapId = MAPS[mapId] ? mapId : "city"; }
+
+  setMap(map) {
+    if (this.map === map) return;
+    if (this.battlefield) { this.scene.remove(this.battlefield.root); this.battlefield.dispose(); }
+    this.battlefield = new Battlefield(map, this.resources);
+    this.scene.add(this.battlefield.root);
+    this.map = map;
+    this.scene.background.set(map.theme === "wild" ? "#9ea99c" : "#9aafb3");
+    this.scene.fog.color.copy(this.scene.background);
+    this.effects.clear();
+    this.motionTracker.clear();
+    for (const model of [...this.actors.values(), ...this.vehicles.values()]) this.scene.remove(model.root);
+    this.actors.clear(); this.vehicles.clear();
+  }
+
+  render(game, dt = 0, { preview = !game.started, frameTime = dt } = {}) {
+    if (this.contextLost || document.hidden || !game.player || !game.map) return;
+    const delta = clamp(Number(dt) || 0, 0, .05);
+    this.animationTime += delta;
+    this.setMap(preview ? MAPS[this.previewMapId] : game.map);
+    this.webgl.info.reset();
+    const { vehicles, ownVehicle, driverIds } = getVehicleRenderState(game);
+    const active = new Set();
     for (const actor of game.actors) {
-      if (!actor.alive) continue;
-      actorIds.add(actor.id);
-      this.motionTracker.sample(actor.id, actor, animationDelta);
-    }
-    this.motionTracker.retain(actorIds);
-    const ctx = this.context;
-    const fov = game.player.scoped ? SCOPED_FOV : FOV;
-    const focal = this.width / (2 * Math.tan(fov / 2));
-    const horizon = cameraHorizon(this.height, game.player.pitch);
-    const shake = game.shake > 0 ? game.shake * 5 : 0;
-    ctx.save();
-    ctx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake);
-    this.drawBackdrop(game, horizon);
-    this.drawGround(game, fov, focal, horizon);
-    this.drawWalls(game, fov, focal, horizon);
-    this.drawWorldSprites(game, focal, horizon, fov);
-    this.drawAtmosphere(game, horizon);
-    this.drawCombatTracers(game, focal, horizon, fov);
-    this.drawWeapon(game);
-    if (game.flash > 0) {
-      ctx.fillStyle = `rgba(255,74,76,${game.flash * .42})`;
-      ctx.fillRect(0, 0, this.width, this.height);
-    }
-    ctx.restore();
-    this.drawRadar(game);
-  }
-
-  triggerShot(payload, localPlayerId) {
-    this.combatTracers.trigger(payload, localPlayerId);
-    if (payload.actorId === localPlayerId) this.weaponViewmodel.triggerShot(payload);
-  }
-
-  resetCombatEffects() {
-    this.combatTracers.clear();
-  }
-
-  drawBackdrop(game, horizon) {
-    const ctx = this.context;
-    const image = this.backgrounds[game.map.id];
-    if (image && image.complete && image.naturalWidth) {
-      const panoramaWidth = this.width * 2.05;
-      const neutralHorizon = this.height * .45;
-      const verticalOffset = horizon - neutralHorizon;
-      const normalized = ((game.player.angle / (Math.PI * 2)) % 1 + 1) % 1;
-      const offset = -normalized * panoramaWidth;
-      const backdrop = this.getBackdrop(game.map.id, image, panoramaWidth, neutralHorizon * 1.7);
-      ctx.fillStyle = game.map.theme === "city" ? "#3ac2f3" : "#52cde5";
-      ctx.fillRect(0, 0, this.width, Math.max(0, verticalOffset));
-      ctx.drawImage(backdrop, offset, verticalOffset);
-      ctx.drawImage(backdrop, offset + panoramaWidth, verticalOffset);
-      const wash = ctx.createLinearGradient(0, 0, 0, horizon);
-      wash.addColorStop(0, "rgba(44,176,239,.02)");
-      wash.addColorStop(1, game.map.theme === "city" ? "rgba(18,64,94,.32)" : "rgba(28,89,57,.28)");
-      ctx.fillStyle = wash;
-      ctx.fillRect(0, 0, this.width, horizon);
-    } else {
-      const sky = ctx.createLinearGradient(0, 0, 0, horizon);
-      sky.addColorStop(0, "#25b8f3");
-      sky.addColorStop(1, "#c9f1ff");
-      ctx.fillStyle = sky;
-      ctx.fillRect(0, 0, this.width, horizon);
-    }
-  }
-
-  getBackdrop(mapId, image, width, height) {
-    const key = `${mapId}:${Math.round(width)}:${Math.round(height)}`;
-    if (this.backdropCache.has(key)) return this.backdropCache.get(key);
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.ceil(width);
-    canvas.height = Math.ceil(height);
-    canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
-    this.backdropCache.set(key, canvas);
-    return canvas;
-  }
-
-  drawGround(game, fov, focal, horizon) {
-    const ctx = this.context;
-    const block = this.width > 900 ? 11 : 8;
-    const leftAngle = game.player.angle - fov / 2;
-    const rightAngle = game.player.angle + fov / 2;
-    for (let screenY = Math.floor(horizon); screenY < this.height; screenY += block) {
-      const rowDistance = Math.min(42, focal * .5 / Math.max(1, screenY - horizon));
-      const leftX = game.player.x + Math.cos(leftAngle) * rowDistance;
-      const leftY = game.player.y + Math.sin(leftAngle) * rowDistance;
-      const rightX = game.player.x + Math.cos(rightAngle) * rowDistance;
-      const rightY = game.player.y + Math.sin(rightAngle) * rowDistance;
-      for (let screenX = 0; screenX < this.width; screenX += block) {
-        const ratio = screenX / this.width;
-        const worldX = leftX + (rightX - leftX) * ratio;
-        const worldY = leftY + (rightY - leftY) * ratio;
-        const noise = hash(Math.floor(worldX * 2), Math.floor(worldY * 2));
-        if (game.map.theme === "city") {
-          const stripe = Math.abs((worldX % 7 + 7) % 7 - 3.5) < .07;
-          const base = 76 + Math.floor(noise * 12);
-          ctx.fillStyle = stripe ? "#f5d96f" : `rgb(${base},${base + 9},${base + 16})`;
-        } else {
-          const dirt = hash(Math.floor(worldX * .5), Math.floor(worldY * .5)) > .69;
-          const base = 84 + Math.floor(noise * 18);
-          ctx.fillStyle = dirt ? `rgb(${base + 38},${base + 18},${base - 18})` : `rgb(${base - 26},${base + 38},${base - 28})`;
-        }
-        ctx.fillRect(screenX, screenY, block + 1, block + 1);
+      if (preview || !actor.alive || actor.id === game.player.id || driverIds.has(actor.id)) continue;
+      active.add(actor.id);
+      let model = this.actors.get(actor.id);
+      if (!model || model.characterId !== actor.characterId || model.team !== actor.team) {
+        if (model) this.scene.remove(model.root);
+        model = new SoldierModel(this.resources, actor); this.actors.set(actor.id, model);
       }
+      model.update(actor, this.motionTracker.sample(actor.id, actor, delta));
+      model.root.visible = true;
     }
-    const shade = ctx.createLinearGradient(0, horizon, 0, this.height);
-    shade.addColorStop(0, "rgba(22,56,68,.32)");
-    shade.addColorStop(.7, "rgba(9,24,31,.04)");
-    shade.addColorStop(1, "rgba(8,18,23,.26)");
-    ctx.fillStyle = shade;
-    ctx.fillRect(0, horizon, this.width, this.height - horizon);
-  }
-
-  drawWalls(game, fov, focal, horizon) {
-    const ctx = this.context;
-    const columnWidth = this.width > 900 ? 5 : 4;
-    for (let screenX = 0; screenX < this.width; screenX += columnWidth) {
-      const cameraX = screenX / this.width * 2 - 1;
-      const rayAngle = game.player.angle + Math.atan(cameraX * Math.tan(fov / 2));
-      const hit = this.castRay(game.map, game.player.x, game.player.y, rayAngle);
-      const corrected = Math.max(.001, hit.distance * Math.cos(rayAngle - game.player.angle));
-      const baseHeight = focal / corrected;
-      const scales = game.map.theme === "city" ? { B: 2.05, C: .55 } : { O: 1.18, R: .82, T: 1.85 };
-      const wallHeight = Math.min(this.height * 2.7, baseHeight * (scales[hit.tile] == null ? 1 : scales[hit.tile]));
-      const bottom = horizon + baseHeight * .5;
-      const top = bottom - wallHeight;
-      const shade = clamp(1 - corrected / 38, .2, 1) * (hit.side ? .76 : 1);
-      ctx.fillStyle = this.wallColor(game.map.theme, hit.tile, shade, hit.wallX);
-      ctx.fillRect(screenX, top, columnWidth + 1, wallHeight);
-      this.drawWallDetail(game.map.theme, hit, screenX, top, wallHeight, columnWidth, shade);
-      for (let offset = 0; offset < columnWidth && screenX + offset < this.width; offset += 1) this.depth[screenX + offset] = corrected;
-    }
-  }
-
-  wallColor(theme, tile, shade, wallX) {
-    const band = Math.floor(wallX * 8) % 2 ? 1 : .92;
-    if (theme === "city") {
-      if (tile === "C") return `rgb(${Math.floor(246 * shade)},${Math.floor(148 * shade)},${Math.floor(76 * shade)})`;
-      if (tile === "B") return `rgb(${Math.floor(83 * shade * band)},${Math.floor(154 * shade * band)},${Math.floor(196 * shade * band)})`;
-      return `rgb(${Math.floor(72 * shade)},${Math.floor(105 * shade)},${Math.floor(124 * shade)})`;
-    }
-    if (tile === "T") return `rgb(${Math.floor(53 * shade)},${Math.floor(137 * shade)},${Math.floor(66 * shade)})`;
-    if (tile === "O") return `rgb(${Math.floor(210 * shade)},${Math.floor(133 * shade)},${Math.floor(57 * shade)})`;
-    return `rgb(${Math.floor(137 * shade * band)},${Math.floor(148 * shade * band)},${Math.floor(159 * shade * band)})`;
-  }
-
-  drawWallDetail(theme, hit, x, top, height, width, shade) {
-    const ctx = this.context;
-    if (height < 8) return;
-    if (theme === "city" && hit.tile === "B") {
-      if (Math.floor(hit.wallX * 12) % 3 !== 0) {
-        ctx.fillStyle = `rgba(255,228,111,${.15 + shade * .28})`;
-        for (let row = 0; row < 5; row += 1) ctx.fillRect(x, top + height * (.12 + row * .18), width + 1, Math.max(1, height * .055));
-      }
-    } else if (hit.tile === "C") {
-      ctx.fillStyle = `rgba(255,245,201,${shade * .48})`;
-      if (Math.floor(hit.wallX * 10) % 4 === 0) ctx.fillRect(x, top + height * .2, width + 1, height * .18);
-    } else if (hit.tile === "T") {
-      ctx.fillStyle = `rgba(157,224,91,${shade * .34})`;
-      if (Math.floor(hit.wallX * 12) % 3 === 0) ctx.fillRect(x, top, width + 1, height * .58);
-    } else {
-      ctx.fillStyle = `rgba(255,255,255,${shade * .11})`;
-      if (Math.floor(hit.wallX * 16) % 5 === 0) ctx.fillRect(x, top, 1, height);
-    }
-    if (Math.floor(hit.wallX * 30) === 0) {
-      ctx.fillStyle = "rgba(22,37,48,.5)";
-      ctx.fillRect(x, top, Math.max(1, width * .45), height);
-    }
-  }
-
-  castRay(map, x, y, angle) {
-    const rayX = Math.cos(angle);
-    const rayY = Math.sin(angle);
-    let mapX = Math.floor(x);
-    let mapY = Math.floor(y);
-    let side = 0;
-    let tile = "#";
-    const deltaX = rayX === 0 ? 1e30 : Math.abs(1 / rayX);
-    const deltaY = rayY === 0 ? 1e30 : Math.abs(1 / rayY);
-    const stepX = rayX < 0 ? -1 : 1;
-    const stepY = rayY < 0 ? -1 : 1;
-    let sideX = rayX < 0 ? (x - mapX) * deltaX : (mapX + 1 - x) * deltaX;
-    let sideY = rayY < 0 ? (y - mapY) * deltaY : (mapY + 1 - y) * deltaY;
-    for (let step = 0; step < 96; step += 1) {
-      if (sideX < sideY) { sideX += deltaX; mapX += stepX; side = 0; }
-      else { sideY += deltaY; mapY += stepY; side = 1; }
-      tile = tileAt(map, mapX, mapY);
-      if (tile !== ".") break;
-    }
-    const rayDistance = side ? sideY - deltaY : sideX - deltaX;
-    const exact = side ? x + rayDistance * rayX : y + rayDistance * rayY;
-    return { distance: rayDistance, tile, side, wallX: exact - Math.floor(exact), mapX, mapY };
-  }
-
-  drawWorldSprites(game, focal, horizon, fov) {
-    const { vehicles, ownVehicle, driverIds: vehicleDrivers } = getVehicleRenderState(game);
-    const sprites = [
-      ...game.actors.filter(actor => actor.alive && !actor.isPlayer && !vehicleDrivers.has(actor.id)).map(actor => ({ ...actor, kind: "actor" })),
-      ...game.projectiles.map(projectile => ({ ...projectile, kind: projectile.type })),
-      ...game.effects.map(effect => ({ ...effect, kind: "effect" })),
-    ];
+    for (const [id, model] of this.actors) if (!active.has(id)) { this.scene.remove(model.root); this.actors.delete(id); }
+    active.add(game.player.id);
+    const motion = this.motionTracker.sample(game.player.id, game.player, delta);
+    this.motionTracker.retain(active);
+    const activeVehicles = new Set();
     for (const vehicle of vehicles) {
-      if (vehicle !== ownVehicle && vehicle.health > 0) sprites.push({ ...vehicle, kind: vehicle.type });
+      if (preview || vehicle.health <= 0) continue;
+      activeVehicles.add(vehicle.id);
+      let model = this.vehicles.get(vehicle.id);
+      if (!model) { model = new VehicleModel(this.resources, vehicle.type); this.vehicles.set(vehicle.id, model); }
+      model.update(vehicle, delta);
+      model.root.visible = vehicle !== ownVehicle;
     }
-    const projected = sprites
-      .map(sprite => ({ sprite, ...this.project(sprite, game.player, focal, horizon) }))
-      .filter(item => item.forward > .15 && Math.abs(item.delta) < fov * .92)
-      .sort((a, b) => b.forward - a.forward);
-    for (const item of projected) {
-      const center = Math.floor(item.x);
-      if (center < 0 || center >= this.width) continue;
-      if (item.sprite.type !== "smoke" && this.depth[center] + .28 < item.forward) continue;
-      this.context.save();
-      if (item.sprite.kind === "actor") this.drawActor(item);
-      if (item.sprite.kind === "tank") this.drawTank(item);
-      if (item.sprite.kind === "armoredCar") this.drawArmoredCar(item);
-      if (item.sprite.kind === "grenade" || item.sprite.kind === "shell") this.drawProjectile(item);
-      if (item.sprite.kind === "effect") this.drawEffect(item);
-      this.context.restore();
+    for (const [id, model] of this.vehicles) if (!activeVehicles.has(id)) { this.scene.remove(model.root); this.vehicles.delete(id); }
+    this.modelBatch.update([...this.actors.values(), ...this.vehicles.values()]);
+    if (preview) {
+      const orbit = this.animationTime * .035;
+      this.camera.position.set(43 + Math.cos(orbit) * 32, 30, 32 + Math.sin(orbit) * 35);
+      this.camera.lookAt(43, 1, 30);
+      this.camera.fov = 55;
+    } else {
+      this.camera.position.set(game.player.x * S, ownVehicle ? 2.5 : EYE_HEIGHT, game.player.y * S);
+      this.camera.rotation.set(-(game.player.pitch || 0), -game.player.angle - Math.PI / 2, 0);
+      this.camera.fov = verticalFov(game.player.scoped ? SCOPED_FOV : FOV, this.camera.aspect);
+      if (game.shake > 0) this.camera.rotation.z = Math.sin(this.animationTime * 120) * game.shake * .006;
     }
-  }
-
-  project(sprite, player, focal, horizon) {
-    const dx = sprite.x - player.x;
-    const dy = sprite.y - player.y;
-    const forward = dx * Math.cos(player.angle) + dy * Math.sin(player.angle);
-    const lateral = -dx * Math.sin(player.angle) + dy * Math.cos(player.angle);
-    return {
-      forward,
-      delta: normalizeAngle(Math.atan2(dy, dx) - player.angle),
-      x: this.width / 2 + lateral / Math.max(.01, forward) * focal,
-      ground: horizon + focal * .5 / Math.max(.01, forward),
-      unit: focal / Math.max(.01, forward),
-    };
-  }
-
-  tracerCameraPoint(point, player) {
-    const dx = point.x - player.x;
-    const dy = point.y - player.y;
-    return {
-      forward: dx * Math.cos(player.angle) + dy * Math.sin(player.angle),
-      lateral: -dx * Math.sin(player.angle) + dy * Math.cos(player.angle),
-      height: point.z - .5,
-    };
-  }
-
-  projectTracerPoint(point, focal, horizon) {
-    return {
-      x: this.width / 2 + point.lateral / point.forward * focal,
-      y: horizon - point.height / point.forward * focal,
-    };
-  }
-
-  tracerSegment(trace, game, focal, horizon, fov) {
-    const player = game.player;
-    const near = .12;
-    const target = this.tracerCameraPoint(trace.to, player);
-    if (trace.actorId === player.id) {
-      if (target.forward <= near) return null;
-      const driven = game.currentVehicle
-        || (game.vehicles || (game.tank ? [game.tank] : [])).find(vehicle => vehicle.driverId === player.id);
-      const muzzle = driven
-        ? { x: this.width * .53, y: this.height * .62 }
-        : this.weaponViewmodel.muzzlePosition(
-          game,
-          this.width,
-          this.height,
-          this.motionTracker.get(player.id),
-        );
-      return {
-        start: muzzle || { x: this.width / 2, y: this.height / 2 },
-        end: this.projectTracerPoint(target, focal, horizon),
-      };
-    }
-
-    let source = this.tracerCameraPoint(trace.from, player);
-    if (trace.incomingHit) {
-      const end = { x: this.width / 2, y: this.height / 2 };
-      if (source.forward > near) return { start: this.projectTracerPoint(source, focal, horizon), end };
-      const direction = normalizeAngle(Math.atan2(trace.from.y - player.y, trace.from.x - player.x) - player.angle);
-      return {
-        start: {
-          x: direction < 0 ? this.width * .08 : this.width * .92,
-          y: clamp(horizon - Math.cos(direction) * this.height * .08, this.height * .2, this.height * .76),
-        },
-        end,
-      };
-    }
-
-    if (source.forward <= near && target.forward <= near) return null;
-    if (source.forward <= near || target.forward <= near) {
-      const behind = source.forward <= near ? source : target;
-      const ahead = source.forward <= near ? target : source;
-      const ratio = (near - behind.forward) / (ahead.forward - behind.forward);
-      const clipped = {
-        forward: near,
-        lateral: behind.lateral + (ahead.lateral - behind.lateral) * ratio,
-        height: behind.height + (ahead.height - behind.height) * ratio,
-      };
-      if (source.forward <= near) source = clipped;
-      else Object.assign(target, clipped);
-    }
-    const start = this.projectTracerPoint(source, focal, horizon);
-    const end = this.projectTracerPoint(target, focal, horizon);
-    const margin = this.width * Math.tan(fov * .18);
-    if ((start.x < -margin && end.x < -margin) || (start.x > this.width + margin && end.x > this.width + margin)) return null;
-    return { start, end };
-  }
-
-  drawCombatTracers(game, focal, horizon, fov) {
-    const ctx = this.context;
-    for (const trace of this.combatTracers.items) {
-      const segment = this.tracerSegment(trace, game, focal, horizon, fov);
-      if (!segment) continue;
-      const alpha = clamp(trace.life / trace.maxLife, 0, 1);
-      const gradient = ctx.createLinearGradient(segment.start.x, segment.start.y, segment.end.x, segment.end.y);
-      const bow = trace.profile === "bow";
-      gradient.addColorStop(0, bow ? "rgba(227,255,244,.98)" : "rgba(255,247,177,.96)");
-      gradient.addColorStop(.62, bow ? "rgba(91,235,203,.94)" : "rgba(255,181,64,.94)");
-      gradient.addColorStop(1, trace.incomingHit ? "rgba(255,47,74,.98)" : bow ? "rgba(49,179,165,.9)" : "rgba(255,112,49,.9)");
-      ctx.save();
-      ctx.lineCap = "round";
-      ctx.globalAlpha = alpha;
-      ctx.strokeStyle = gradient;
-      ctx.shadowColor = trace.incomingHit ? "#ff304f" : bow ? "#55e8cf" : "#ffb238";
-      ctx.shadowBlur = trace.profile === "sniper" ? 18 : bow ? 8 : 11;
-      ctx.lineWidth = trace.profile === "sniper" ? 7 : bow ? 3 : 4.5;
-      ctx.beginPath();
-      ctx.moveTo(segment.start.x, segment.start.y);
-      ctx.lineTo(segment.end.x, segment.end.y);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-      ctx.strokeStyle = "rgba(255,255,231,.98)";
-      ctx.lineWidth = trace.profile === "sniper" ? 2.2 : bow ? 1 : 1.35;
-      ctx.stroke();
-      if (trace.incomingHit) this.drawInjuryImpact(segment.end, alpha);
-      ctx.restore();
-    }
-  }
-
-  drawInjuryImpact(point, alpha) {
-    const ctx = this.context;
-    const radius = Math.max(34, this.height * .075);
-    const glow = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, radius);
-    glow.addColorStop(0, `rgba(255,48,68,${.3 * alpha})`);
-    glow.addColorStop(.3, `rgba(255,57,75,${.15 * alpha})`);
-    glow.addColorStop(1, "rgba(255,57,75,0)");
-    ctx.fillStyle = glow;
-    ctx.fillRect(point.x - radius, point.y - radius, radius * 2, radius * 2);
-    ctx.strokeStyle = `rgba(255,91,104,${.62 * alpha})`;
-    ctx.lineWidth = Math.max(2, this.height * .004);
-    ctx.beginPath();
-    ctx.arc(point.x, point.y, radius * .3, -.72, .72);
-    ctx.stroke();
-  }
-
-  drawActor({ sprite, x, ground, unit, forward }) {
-    const ctx = this.context;
-    const colors = TEAM_COLORS[sprite.team] || TEAM_COLORS.terror;
-    const profile = getActorRenderProfile(sprite.characterId);
-    const scale = unit * .98 * profile.scale;
-    const torsoWidth = profile.torsoWidth;
-    const shoulder = .33 * profile.shoulderScale;
-    const headWidth = .19 * profile.headScale;
-    const headHeight = .2 * profile.headScale;
-    const motion = gaitPose(this.motionTracker.get(sprite.id));
-    const idlePhase = this.animationTime * 2 + (Number(sprite.index) || 0) * 1.7;
-    const bob = (Math.sin(idlePhase) * .004 - motion.bounce * .026) * scale;
-    const fog = clamp(1.15 - forward / 38, .28, 1);
-    ctx.globalAlpha = fog;
-    ctx.fillStyle = "rgba(22,31,42,.38)";
-    ctx.beginPath();
-    ctx.ellipse(x, ground, scale * .28, Math.max(2, scale * .045), 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.save();
-    ctx.translate(x, ground + bob);
-    ctx.scale(scale, scale);
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    ctx.lineWidth = .035;
-    ctx.strokeStyle = "#172536";
-
-    this.drawActorLeg(ctx, -.12, -.39, motion.left * .52, colors.shade);
-    this.drawActorLeg(ctx, .12, -.39, motion.right * .52, colors.main);
-
-    if (profile.helmet === "tactical" || profile.helmet === "round") {
-      roundedPath(ctx, -torsoWidth * .6, -.77, torsoWidth * 1.2, .33, .12);
-      ctx.fillStyle = colors.gear;
-      ctx.fill();
-      ctx.stroke();
-    }
-
-    roundedPath(ctx, -torsoWidth / 2, -.82, torsoWidth, .48, .14);
-    ctx.fillStyle = colors.main;
-    ctx.fill();
-    ctx.stroke();
-    roundedPath(ctx, -torsoWidth / 2 + .05, -.74, torsoWidth - .1, .31, .08);
-    ctx.fillStyle = colors.gear;
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = profile.accent;
-    ctx.fillRect(-torsoWidth * .32, -.7, torsoWidth * .64, .055);
-    ctx.fillStyle = "rgba(255,255,255,.22)";
-    ctx.fillRect(-torsoWidth * .33, -.59, .1, .11);
-    ctx.fillRect(torsoWidth * .33 - .1, -.59, .1, .11);
-
-    this.fillStrokeCapsule(ctx, -shoulder - .09, -.72, .18, .4, .08, colors.shade, -.22);
-    this.fillStrokeCapsule(ctx, shoulder - .09, -.72, .18, .4, .08, colors.main, .18);
-    ctx.fillStyle = "#243644";
-    ctx.beginPath();
-    ctx.arc(-shoulder, -.36, .085, 0, Math.PI * 2);
-    ctx.arc(shoulder, -.36, .085, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = profile.skinTone;
-    ctx.beginPath();
-    ctx.ellipse(0, -.98, headWidth, headHeight, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = profile.helmet === "visor" ? profile.hairColor : colors.gear;
-    ctx.beginPath();
-    const helmetWidth = headWidth + (profile.helmet === "tactical" ? .07 : .035);
-    ctx.arc(0, -1.03, helmetWidth, Math.PI, Math.PI * 2);
-    ctx.lineTo(headWidth + .01, -.95);
-    ctx.quadraticCurveTo(0, -.87, -headWidth - .01, -.95);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    if (profile.helmet === "tactical") {
-      ctx.fillStyle = colors.gear;
-      ctx.beginPath();
-      ctx.arc(-helmetWidth, -.98, .055, 0, Math.PI * 2);
-      ctx.arc(helmetWidth, -.98, .055, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    }
-    ctx.fillStyle = profile.helmet === "visor" ? profile.accent : "#bdefff";
-    roundedPath(ctx, -headWidth * .8, -1.02, headWidth * 1.6, .085, .04);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = profile.helmet === "round" ? profile.accent : colors.main;
-    roundedPath(ctx, -headWidth * .84, -.955, headWidth * 1.68, .105, .04);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.save();
-    ctx.translate(-.1, -.52);
-    ctx.rotate(-.38);
-    roundedPath(ctx, -.29, -.055, .63, .11, .045);
-    ctx.fillStyle = "#2e3c42";
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#111d24";
-    ctx.fillRect(.22, -.028, .27, .056);
-    roundedPath(ctx, -.08, .035, .14, .16, .025);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-    ctx.restore();
-
-    ctx.globalAlpha = fog;
-    ctx.fillStyle = colors.light;
-    ctx.beginPath();
-    ctx.arc(x - scale * .31, ground - scale * .66, Math.max(1.5, scale * .025), 0, Math.PI * 2);
-    ctx.fill();
-    if (forward < 16) {
-      const barWidth = Math.max(25, scale * .63);
-      const barY = ground - scale * 1.25;
-      ctx.fillStyle = "rgba(19,31,42,.76)";
-      roundedPath(ctx, x - barWidth / 2, barY, barWidth, Math.max(3, scale * .025), 2);
-      ctx.fill();
-      ctx.fillStyle = colors.light;
-      ctx.fillRect(x - barWidth / 2, barY, barWidth * clamp(sprite.health / 100, 0, 1), Math.max(3, scale * .025));
-      ctx.fillStyle = "white";
-      ctx.font = `800 ${Math.max(9, scale * .09)}px system-ui`;
-      ctx.textAlign = "center";
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = "rgba(23,37,54,.8)";
-      ctx.strokeText(sprite.name, x, barY - Math.max(4, scale * .035));
-      ctx.fillText(sprite.name, x, barY - Math.max(4, scale * .035));
-    }
-  }
-
-  fillStrokeCapsule(ctx, x, y, width, height, radius, fill, rotation = 0) {
-    ctx.save();
-    ctx.translate(x + width / 2, y + height / 2);
-    ctx.rotate(rotation);
-    roundedPath(ctx, -width / 2, -height / 2, width, height, radius);
-    ctx.fillStyle = fill;
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  drawActorLeg(ctx, hipX, hipY, swing, color) {
-    ctx.save();
-    ctx.translate(hipX, hipY);
-    ctx.rotate(swing);
-    this.fillStrokeCapsule(ctx, -.07, 0, .14, .41, .055, color);
-    this.fillStrokeCapsule(ctx, -.085, .33, .23, .105, .04, "#263a45", -.08 - swing * .18);
-    ctx.restore();
-  }
-
-  drawTank({ sprite, x, ground, unit, forward }) {
-    const ctx = this.context;
-    const width = unit * 1.9;
-    const height = unit * .87;
-    const top = ground - height;
-    ctx.globalAlpha = clamp(1.15 - forward / 38, .3, 1);
-    ctx.fillStyle = "rgba(19,31,42,.38)";
-    ctx.beginPath();
-    ctx.ellipse(x, ground, width * .55, height * .13, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.lineJoin = "round";
-    ctx.lineWidth = Math.max(2, unit * .045);
-    ctx.strokeStyle = "#17304a";
-    roundedPath(ctx, x - width * .51, top + height * .42, width * 1.02, height * .55, height * .18);
-    ctx.fillStyle = "#52b65a";
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#294f46";
-    roundedPath(ctx, x - width * .47, top + height * .65, width * .94, height * .24, height * .1);
-    ctx.fill();
-    ctx.stroke();
-    for (let index = -3; index <= 3; index += 1) {
-      ctx.fillStyle = index % 2 ? "#88d35f" : "#e8d45b";
-      ctx.beginPath();
-      ctx.arc(x + index * width * .12, top + height * .77, height * .105, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    }
-    roundedPath(ctx, x - width * .24, top + height * .2, width * .48, height * .34, height * .15);
-    ctx.fillStyle = "#7ad166";
-    ctx.fill();
-    ctx.stroke();
-    const barrelAngle = normalizeAngle(sprite.turretAngle - sprite.angle);
-    const barrelX = Math.sin(barrelAngle) * width * .27;
-    ctx.strokeStyle = "#25444a";
-    ctx.lineWidth = Math.max(4, unit * .12);
-    ctx.beginPath();
-    ctx.moveTo(x, top + height * .29);
-    ctx.lineTo(x + barrelX, top - height * .25);
-    ctx.stroke();
-    ctx.fillStyle = "#d7e85e";
-    ctx.beginPath();
-    ctx.arc(x - width * .13, top + height * .35, height * .055, 0, Math.PI * 2);
-    ctx.arc(x + width * .13, top + height * .35, height * .055, 0, Math.PI * 2);
-    ctx.fill();
-    if (forward < 10) {
-      ctx.fillStyle = "#ecffb2";
-      ctx.font = `900 ${Math.max(8, unit * .12)}px system-ui`;
-      ctx.textAlign = "center";
-      ctx.strokeStyle = "#17304a";
-      ctx.lineWidth = 3;
-      ctx.strokeText("M-77", x, top - height * .14);
-      ctx.fillText("M-77", x, top - height * .14);
-    }
-  }
-
-  drawArmoredCar({ sprite, x, ground, unit, forward }) {
-    const ctx = this.context;
-    const width = unit * 1.55;
-    const height = unit * .78;
-    const top = ground - height;
-    ctx.globalAlpha = clamp(1.15 - forward / 38, .3, 1);
-    ctx.fillStyle = "rgba(19,31,42,.38)";
-    ctx.beginPath();
-    ctx.ellipse(x, ground, width * .54, height * .13, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.lineJoin = "round";
-    ctx.lineWidth = Math.max(2, unit * .04);
-    ctx.strokeStyle = "#172f43";
-
-    for (const side of [-1, 1]) {
-      ctx.fillStyle = "#203743";
-      ctx.beginPath();
-      ctx.arc(x + side * width * .34, top + height * .82, height * .17, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = "#74d8dc";
-      ctx.beginPath();
-      ctx.arc(x + side * width * .34, top + height * .82, height * .065, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    ctx.fillStyle = "#347d91";
-    roundedPath(ctx, x - width * .5, top + height * .39, width, height * .46, height * .12);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#58b9bd";
-    ctx.beginPath();
-    ctx.moveTo(x - width * .3, top + height * .42);
-    ctx.lineTo(x - width * .17, top + height * .16);
-    ctx.lineTo(x + width * .25, top + height * .16);
-    ctx.lineTo(x + width * .39, top + height * .42);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#bceff1";
-    roundedPath(ctx, x - width * .12, top + height * .21, width * .25, height * .15, height * .035);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = "#286272";
-    ctx.beginPath();
-    ctx.arc(x, top + height * .18, height * .16, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    const gunAngle = normalizeAngle(sprite.turretAngle - sprite.angle);
-    const gunX = Math.sin(gunAngle) * width * .24;
-    ctx.strokeStyle = "#203c49";
-    ctx.lineWidth = Math.max(3, unit * .065);
-    ctx.beginPath();
-    ctx.moveTo(x, top + height * .14);
-    ctx.lineTo(x + gunX, top - height * .2);
-    ctx.stroke();
-    ctx.fillStyle = "#ffe36a";
-    ctx.beginPath();
-    ctx.arc(x - width * .35, top + height * .54, height * .055, 0, Math.PI * 2);
-    ctx.arc(x + width * .35, top + height * .54, height * .055, 0, Math.PI * 2);
-    ctx.fill();
-    if (forward < 10) {
-      ctx.fillStyle = "#dffcff";
-      ctx.font = `900 ${Math.max(8, unit * .11)}px system-ui`;
-      ctx.textAlign = "center";
-      ctx.strokeStyle = "#17304a";
-      ctx.lineWidth = 3;
-      ctx.strokeText("A-12", x, top - height * .14);
-      ctx.fillText("A-12", x, top - height * .14);
-    }
-  }
-
-  drawProjectile({ sprite, x, ground, unit }) {
-    const ctx = this.context;
-    const z = sprite.z == null ? .2 : sprite.z;
-    const y = ground - unit * z;
-    const throwable = THROWABLES[sprite.throwableId];
-    const color = sprite.kind === "shell" ? "#fff36b" : throwable?.color || "#ff994c";
-    const radius = Math.max(3, unit * (sprite.kind === "shell" ? .075 : .11));
-    ctx.fillStyle = color;
-    ctx.strokeStyle = "#273548";
-    ctx.lineWidth = Math.max(2, radius * .22);
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-  }
-
-  drawEffect({ sprite, x, ground, unit }) {
-    const ctx = this.context;
-    const progress = 1 - sprite.life / sprite.maxLife;
-    if (sprite.type === "smoke") {
-      ctx.globalAlpha = clamp(sprite.life < 1 ? sprite.life : progress < .18 ? progress / .18 : 1, 0, .78);
-      for (let index = 0; index < 10; index += 1) {
-        const ox = Math.sin(index * 14.7) * unit * sprite.radius * .3;
-        const oy = Math.cos(index * 9.1) * unit * sprite.radius * .17 - unit * .45;
-        const radius = unit * sprite.radius * (.17 + (index % 3) * .045);
-        ctx.fillStyle = index % 2 ? "#dce9e7" : "#a9c4c0";
-        ctx.strokeStyle = "rgba(42,69,76,.45)";
-        ctx.lineWidth = Math.max(1, unit * .02);
-        ctx.beginPath();
-        ctx.arc(x + ox, ground + oy, radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
+    this.camera.updateProjectionMatrix();
+    this.camera.updateMatrixWorld();
+    this.sun.position.copy(this.camera.position).add(this.sunOffset);
+    this.sun.target.position.set(this.camera.position.x, 0, this.camera.position.z);
+    this.effects.root.visible = !preview;
+    if (!preview) this.effects.update(game, delta, this.camera);
+    this.scene.fog.density = this.effects.insideSmoke && !preview ? .14 : .006;
+    this.composer.render(delta);
+    if (!preview) {
+      this.viewmodel.update(game, motion, delta, this.camera.aspect);
+      if (this.viewmodel.scene.visible && !ownVehicle) {
+        this.camera.getWorldDirection(this.forward);
+        this.raycaster.set(this.camera.position, this.forward);
+        this.raycaster.far = 1.5;
+        const wall = this.raycaster.intersectObject(this.battlefield.collider)[0];
+        if (wall) this.viewmodel.root.rotation.x -= (1 - wall.distance / 1.5) * .7;
+        this.webgl.autoClear = false;
+        this.webgl.clearDepth();
+        this.webgl.toneMapping = THREE.ACESFilmicToneMapping;
+        this.webgl.render(this.viewmodel.scene, this.viewmodel.camera);
+        this.webgl.toneMapping = THREE.NoToneMapping;
+        this.webgl.autoClear = true;
       }
-      return;
+      this.radarClock += delta;
+      if (this.radarClock > .08 || delta === 0) { drawRadar(this.radar, game); this.radarClock = 0; }
     }
-    const radius = unit * sprite.radius * (.22 + progress * .72);
-    const colors = sprite.type === "skull" ? ["#d39aff", "#7c46d8"] : sprite.type === "firework" ? ["#fff36b", "#ff6755"] : ["#fff7a2", "#ff7042"];
-    ctx.globalAlpha = 1 - progress;
-    ctx.fillStyle = colors[0];
-    ctx.strokeStyle = "#5a2c37";
-    ctx.lineWidth = Math.max(2, unit * .04);
-    ctx.beginPath();
-    const points = 12;
-    for (let index = 0; index < points * 2; index += 1) {
-      const angle = index / (points * 2) * Math.PI * 2 - Math.PI / 2;
-      const length = index % 2 ? radius * .48 : radius;
-      const px = x + Math.cos(angle) * length;
-      const py = ground - unit * .28 + Math.sin(angle) * length;
-      if (index === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = colors[1];
-    ctx.beginPath();
-    ctx.arc(x, ground - unit * .28, radius * .36, 0, Math.PI * 2);
-    ctx.fill();
+    this.samplePerformance(frameTime);
   }
 
-  drawAtmosphere(game, horizon) {
-    const ctx = this.context;
-    ctx.fillStyle = game.map.theme === "city" ? "rgba(60,194,255,.035)" : "rgba(125,239,121,.035)";
-    ctx.fillRect(0, horizon * .76, this.width, this.height - horizon * .76);
+  samplePerformance(dt) {
+    if (!(dt > 0)) return;
+    this.sampleTime += dt; this.sampleFrames++;
+    if (this.sampleTime < 2) return;
+    const fps = this.sampleFrames / this.sampleTime;
+    this.lowPerformanceSamples = fps < 38 ? this.lowPerformanceSamples + 1 : 0;
+    this.highPerformanceSamples = fps > 56 ? this.highPerformanceSamples + 1 : 0;
+    let scale = this.pixelScale;
+    if (this.lowPerformanceSamples >= 2) { scale = Math.max(.6, scale - .15); this.lowPerformanceSamples = 0; }
+    if (this.highPerformanceSamples >= 4) { scale = Math.min(1, scale + .1); this.highPerformanceSamples = 0; }
+    if (scale !== this.pixelScale) { this.pixelScale = scale; this.resize(); }
+    this.stats = { fps: Math.round(fps), calls: this.webgl.info.render.calls, triangles: this.webgl.info.render.triangles, scale: this.pixelScale };
+    this.canvas.dispatchEvent(new CustomEvent("render-stats", { detail: this.stats }));
+    this.sampleTime = this.sampleFrames = 0;
   }
 
-  drawWeapon(game) {
-    if (!game.player.alive) return;
-    const vehicle = game.currentVehicle
-      || (game.vehicles || (game.tank ? [game.tank] : [])).find(item => item.driverId === game.player.id);
-    if (vehicle) { this.drawVehicleCockpit(vehicle); return; }
-    this.weaponViewmodel.draw(
-      this.context,
-      game,
-      this.width,
-      this.height,
-      this.motionTracker.get(game.player.id),
-    );
-  }
-
-  drawVehicleCockpit(vehicle) {
-    const ctx = this.context;
-    const width = this.width;
-    const height = this.height;
-    const armoredCar = vehicle.type === "armoredCar";
-    ctx.fillStyle = armoredCar ? "#24576a" : "#294e49";
-    ctx.strokeStyle = "#142d39";
-    ctx.lineWidth = Math.max(5, height * .01);
-    ctx.beginPath();
-    const edgeY = armoredCar ? .78 : .72;
-    const dashY = armoredCar ? .7 : .64;
-    ctx.moveTo(0, height); ctx.lineTo(width * .14, height * edgeY); ctx.lineTo(width * .4, height * dashY); ctx.lineTo(width * .6, height * dashY); ctx.lineTo(width * .86, height * edgeY); ctx.lineTo(width, height); ctx.closePath();
-    ctx.fill(); ctx.stroke();
-    ctx.fillStyle = armoredCar ? "#4da6b5" : "#7bd266";
-    roundedPath(ctx, width * .39, height * (armoredCar ? .75 : .69), width * .22, height * .18, height * .04); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = armoredCar ? "#bff8ff" : "#d7e85e";
-    ctx.font = `900 ${height * .04}px system-ui`;
-    ctx.textAlign = "center";
-    ctx.fillText(Math.round(Math.abs(vehicle.speed) * 31).toString().padStart(3, "0"), width * .5, height * (armoredCar ? .85 : .79));
-  }
-
-  drawTankCockpit(game) { this.drawVehicleCockpit(game.tank); }
-
-  drawRadar(game) {
-    const ctx = this.radarContext;
-    const width = this.radar.width;
-    const height = this.radar.height;
-    const mapWidth = game.map.grid[0].length;
-    const mapHeight = game.map.grid.length;
-    const scale = Math.min(width / mapWidth, height / mapHeight);
-    const offsetX = (width - mapWidth * scale) / 2;
-    const offsetY = (height - mapHeight * scale) / 2;
-    ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = "#122d3a";
-    ctx.fillRect(0, 0, width, height);
-    for (let y = 0; y < mapHeight; y += 1) {
-      for (let x = 0; x < mapWidth; x += 1) {
-        const tile = game.map.grid[y][x];
-        if (tile === ".") continue;
-        ctx.fillStyle = game.map.theme === "city" ? (tile === "C" ? "#de9a4d" : "#315b72") : (tile === "T" ? "#3c7844" : tile === "O" ? "#ad733b" : "#64717b");
-        ctx.fillRect(offsetX + x * scale, offsetY + y * scale, scale + .5, scale + .5);
-      }
-    }
-    for (const actor of game.actors) {
-      if (!actor.alive) continue;
-      ctx.fillStyle = actor.team === TEAM.SEAL ? "#6ce9ff" : "#ff735f";
-      ctx.beginPath();
-      ctx.arc(offsetX + actor.x * scale, offsetY + actor.y * scale, actor.isPlayer ? 3.6 : 2.4, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    for (const vehicle of (game.vehicles || (game.tank ? [game.tank] : [])).filter(item => item.health > 0)) {
-      ctx.fillStyle = vehicle.type === "armoredCar" ? "#6ce9ff" : "#ffdf5f";
-      const size = vehicle.type === "armoredCar" ? 4 : 5;
-      ctx.fillRect(offsetX + vehicle.x * scale - size / 2, offsetY + vehicle.y * scale - size / 2, size, size);
-    }
-    ctx.strokeStyle = "rgba(255,255,255,.35)";
-    ctx.strokeRect(offsetX, offsetY, mapWidth * scale, mapHeight * scale);
+  triggerShot(payload, playerId) { this.effects.trigger(payload, playerId); if (payload.actorId === playerId) this.viewmodel.triggerShot(payload); }
+  resetCombatEffects() { this.effects.clear(); this.viewmodel.kick = this.viewmodel.swing = this.viewmodel.flashTime = 0; }
+  dispose() {
+    window.removeEventListener("resize", this.onResize);
+    this.canvas.removeEventListener("webglcontextlost", this.onContextLost);
+    this.canvas.removeEventListener("webglcontextrestored", this.onContextRestored);
+    this.battlefield?.dispose(); this.effects.dispose(); this.viewmodel.dispose(); this.modelBatch.dispose();
+    this.composer.dispose(); this.environment.dispose(); this.resources.dispose(); this.webgl.dispose();
+    this.scene.clear();
   }
 }

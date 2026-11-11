@@ -4,7 +4,7 @@ import {
   resolveMatchCondition, spawnCells,
 } from "./config.js?v=20261008-grenade-v11";
 import { applyCameraPitch } from "./camera.js?v=20261008-grenade-v11";
-import { createShotEvent } from "./shot-geometry.js?v=20261008-grenade-v11";
+import { createShotEvent, withinTargetElevation } from "./shot-geometry.js?v=20261008-grenade-v11";
 import {
   ACTOR_COLLISION_RADIUS, advanceVehicle, collidesWithActor, collidesWithVehicle, createVehicleStates,
   drivenVehicle, resolveInteractionVehicle, vehicleExitCandidates, vehicleProfile,
@@ -223,7 +223,7 @@ export class GameState {
     for (const target of this.actors) {
       if (!target.alive || target.team === actor.team || target === actor) continue;
       const targetDistance = distance(actor, target);
-      if (targetDistance > range || !this.hasLineOfSight(actor, target)) continue;
+      if (targetDistance > range || !withinTargetElevation(actor, target) || !this.hasLineOfSight(actor, target)) continue;
       const angle = Math.abs(normalizeAngle(Math.atan2(target.y - actor.y, target.x - actor.x) - actor.angle));
       const allowed = Math.max(margin, Math.atan(.3 / targetDistance));
       if (angle < allowed && angle + targetDistance * .0005 < best) {

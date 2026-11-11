@@ -113,6 +113,7 @@ test("versioned match state restores kills, ownership references and the absolut
   match.setInput("state-user", {
     movement: { x: 1, y: -1 },
     angle: .75,
+    pitch: -.25,
     fireHeld: true,
     actions: [["fire"]],
   });
@@ -143,6 +144,7 @@ test("versioned match state restores kills, ownership references and the absolut
   assert.deepEqual(restored.inputs.get("state-user"), {
     movement: { x: 1, y: -1 },
     angle: .75,
+    pitch: -.25,
     fireHeld: false,
     actions: [],
   });
