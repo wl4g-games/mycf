@@ -3,6 +3,7 @@ import {
   distance, isSolid, normalizeAngle, resolveCharacterId, resolveMatchCondition, spawnCells,
 } from "./config.js?v=20261008-grenade-v11";
 import { applyCameraPitch } from "./camera.js?v=20261008-grenade-v11";
+import { clearBuildingCells } from "../ws-server/src/bio-mode.js";
 import {
   ACTOR_COLLISION_RADIUS, collidesWithVehicle, createVehicleStates, drivenVehicle,
   resolveInteractionVehicle,
@@ -29,6 +30,7 @@ export class NetworkGameState {
     this.score = { seal: 0, terror: 0 };
     this.actorInterpolationTargets = new Map();
     this.vehicleInterpolationTargets = new Map();
+    this.bioDestructionKey = "";
   }
 
   start(payload) {
@@ -42,6 +44,8 @@ export class NetworkGameState {
       modeId: this.mode.id,
       loadoutId: this.client.self.loadoutId || "recon",
       characterId: resolveCharacterId(this.client.self.characterId || DEFAULT_CHARACTER_ID),
+      battleModeId: room.battleModeId || "team",
+      bioDuration: room.bioDuration || 300,
       ...this.rules,
     };
     const spawn = spawnCells(this.map, this.assignment.team)[0];
@@ -84,7 +88,13 @@ export class NetworkGameState {
     const previousAlive = this.player?.alive ?? true;
     const previousActors = new Map(this.actors.map(actor => [actor.id, actor]));
     const previousVehicles = new Map((this.vehicles || []).map(vehicle => [vehicle.id, vehicle]));
-    this.map = MAPS[snapshot.mapId] || this.map;
+    const baseMap = MAPS[snapshot.mapId] || this.map;
+    const destructionKey = (snapshot.bio?.destroyed || []).join(",");
+    if (this.map.id !== baseMap.id || destructionKey !== this.bioDestructionKey) {
+      this.map = { ...baseMap, grid: [...baseMap.grid] };
+      for (const building of snapshot.bio?.buildings || []) if (snapshot.bio.destroyed.includes(building.id)) clearBuildingCells(this.map, building);
+      this.bioDestructionKey = destructionKey;
+    }
     this.mode = GAME_MODES[snapshot.modeId] || this.mode;
     this.rules = resolveMatchCondition({ conditionId: snapshot.conditionId || this.rules.id });
     this.time = snapshot.time;
@@ -120,6 +130,8 @@ export class NetworkGameState {
     this.syncVehicleAliases();
     this.projectiles = snapshot.projectiles || [];
     this.effects = snapshot.effects || [];
+    this.bio = snapshot.bio || null;
+    if (snapshot.battleModeId === "bio") this.rules = resolveMatchCondition(snapshot);
     this.feed = snapshot.feed || [];
     this.player = this.actors.find(actor => actor.id === snapshot.playerId) || this.player;
     if (!this.player) return;
@@ -133,6 +145,7 @@ export class NetworkGameState {
   }
 
   handleCombatEvent(event) {
+    if (event.type === "announce") this.emit("announce", event);
     if (event.type === "shot") {
       const localShot = event.userId === this.client.self.id;
       this.audio.weaponShot({

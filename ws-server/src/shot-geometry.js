@@ -26,16 +26,17 @@ export function traceShotPath(map, actor, range, victim = null) {
   const pitch = victim ? 0 : clampAimPitch(actor.pitch);
   const directionX = Math.cos(angle) * Math.cos(pitch);
   const directionY = Math.sin(angle) * Math.cos(pitch);
+  const muzzleHeight = MUZZLE_HEIGHT + (Number(actor.z) || 0);
   const from = {
     x: actor.x + directionX * .32,
     y: actor.y + directionY * .32,
-    z: MUZZLE_HEIGHT,
+    z: muzzleHeight,
   };
 
   if (finitePoint(victim)) {
     return {
       from,
-      to: { x: victim.x, y: victim.y, z: IMPACT_HEIGHT },
+      to: { x: victim.x, y: victim.y, z: victim.isMonster ? Math.max(.1, Math.min(victim.height, muzzleHeight - Math.tan(actor.pitch || 0) * Math.hypot(victim.x - actor.x, victim.y - actor.y))) : IMPACT_HEIGHT },
     };
   }
 
@@ -46,7 +47,7 @@ export function traceShotPath(map, actor, range, victim = null) {
     const nextDistance = Math.min(range, travelled + TRACE_STEP);
     const nextX = from.x + directionX * nextDistance;
     const nextY = from.y + directionY * nextDistance;
-    if (isSolid(map, nextX, nextY) || MUZZLE_HEIGHT - Math.sin(pitch) * nextDistance < 0) break;
+    if ((!(actor.z > .8) && isSolid(map, nextX, nextY)) || muzzleHeight - Math.sin(pitch) * nextDistance < 0) break;
     endX = nextX;
     endY = nextY;
     travelled = nextDistance;
@@ -54,7 +55,7 @@ export function traceShotPath(map, actor, range, victim = null) {
 
   return {
     from,
-    to: { x: endX, y: endY, z: pitch ? Math.max(0, MUZZLE_HEIGHT - Math.sin(pitch) * travelled) : IMPACT_HEIGHT },
+    to: { x: endX, y: endY, z: pitch || actor.z ? Math.max(0, muzzleHeight - Math.sin(pitch) * travelled) : IMPACT_HEIGHT },
   };
 }
 

@@ -10,6 +10,8 @@ import { FirstPersonWeapon } from "./three/viewmodel.js";
 import { BattlefieldEffects } from "./three/effects.js";
 import { ModelBatch } from "./three/model-batch.js";
 import { drawRadar } from "./three/radar.js";
+import { CharacterLibrary } from "./three/characters.js";
+import { BioScene, HelicopterModel, damagedMap } from "./three/bio-scene.js";
 
 export { getActorRenderProfile } from "./three/models.js";
 
@@ -27,6 +29,7 @@ export class Renderer {
     this.canvas = canvas;
     this.radar = radar;
     this.resources = new RenderResources();
+    this.characters = new CharacterLibrary();
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color("#9aafb3");
     this.scene.fog = new THREE.FogExp2("#9aafb3", .006);
@@ -63,6 +66,7 @@ export class Renderer {
     this.actors = new Map(); this.vehicles = new Map();
     this.modelBatch = new ModelBatch();
     this.scene.add(this.modelBatch.root);
+    this.bioScene = new BioScene(this.scene, this.resources);
     this.raycaster = new THREE.Raycaster();
     this.raycaster.firstHitOnly = true;
     this.forward = new THREE.Vector3();
@@ -113,8 +117,9 @@ export class Renderer {
     this.scene.fog.color.copy(this.scene.background);
     this.effects.clear();
     this.motionTracker.clear();
-    for (const model of [...this.actors.values(), ...this.vehicles.values()]) this.scene.remove(model.root);
+    for (const model of [...this.actors.values(), ...this.vehicles.values()]) { model.dispose?.(); this.scene.remove(model.root); }
     this.actors.clear(); this.vehicles.clear();
+    this.destructionKey = "";
   }
 
   render(game, dt = 0, { preview = !game.started, frameTime = dt } = {}) {
@@ -122,6 +127,12 @@ export class Renderer {
     const delta = clamp(Number(dt) || 0, 0, .05);
     this.animationTime += delta;
     this.setMap(preview ? MAPS[this.previewMapId] : game.map);
+    const destructionKey = preview ? "" : (game.bio?.destroyed || []).join(",");
+    if (destructionKey !== this.destructionKey) {
+      this.scene.remove(this.battlefield.root); this.battlefield.dispose();
+      this.battlefield = new Battlefield(damagedMap(this.map, preview ? null : game.bio), this.resources);
+      this.scene.add(this.battlefield.root); this.destructionKey = destructionKey;
+    }
     this.webgl.info.reset();
     const { vehicles, ownVehicle, driverIds } = getVehicleRenderState(game);
     const active = new Set();
@@ -129,14 +140,16 @@ export class Renderer {
       if (preview || !actor.alive || actor.id === game.player.id || driverIds.has(actor.id)) continue;
       active.add(actor.id);
       let model = this.actors.get(actor.id);
-      if (!model || model.characterId !== actor.characterId || model.team !== actor.team) {
-        if (model) this.scene.remove(model.root);
-        model = new SoldierModel(this.resources, actor); this.actors.set(actor.id, model);
+      if (!model || model.characterId !== actor.characterId || model.team !== actor.team || Boolean(model.skinned) !== this.characters.loaded) {
+        if (model) { model.dispose?.(); this.scene.remove(model.root); }
+        model = this.characters.loaded ? this.characters.create(this.resources, actor) : new SoldierModel(this.resources, actor);
+        this.actors.set(actor.id, model);
+        if (model.skinned) this.scene.add(model.root);
       }
-      model.update(actor, this.motionTracker.sample(actor.id, actor, delta));
+      model.update(actor, this.motionTracker.sample(actor.id, actor, delta), delta);
       model.root.visible = true;
     }
-    for (const [id, model] of this.actors) if (!active.has(id)) { this.scene.remove(model.root); this.actors.delete(id); }
+    for (const [id, model] of this.actors) if (!active.has(id)) { model.dispose?.(); this.scene.remove(model.root); this.actors.delete(id); }
     active.add(game.player.id);
     const motion = this.motionTracker.sample(game.player.id, game.player, delta);
     this.motionTracker.retain(active);
@@ -145,19 +158,21 @@ export class Renderer {
       if (preview || vehicle.health <= 0) continue;
       activeVehicles.add(vehicle.id);
       let model = this.vehicles.get(vehicle.id);
-      if (!model) { model = new VehicleModel(this.resources, vehicle.type); this.vehicles.set(vehicle.id, model); }
+      if (!model) { model = vehicle.type === "helicopter" ? new HelicopterModel(this.resources) : new VehicleModel(this.resources, vehicle.type); this.vehicles.set(vehicle.id, model); }
       model.update(vehicle, delta);
       model.root.visible = vehicle !== ownVehicle;
     }
     for (const [id, model] of this.vehicles) if (!activeVehicles.has(id)) { this.scene.remove(model.root); this.vehicles.delete(id); }
-    this.modelBatch.update([...this.actors.values(), ...this.vehicles.values()]);
+    this.bioScene.update(preview ? null : game.bio, this.camera, this.animationTime);
+    const rigidModels = [...this.actors.values()].map(model => model.skinned ? { root: model.weapon.root } : model);
+    this.modelBatch.update(rigidModels.concat([...this.vehicles.values()], [...this.bioScene.models.values()]));
     if (preview) {
       const orbit = this.animationTime * .035;
       this.camera.position.set(43 + Math.cos(orbit) * 32, 30, 32 + Math.sin(orbit) * 35);
       this.camera.lookAt(43, 1, 30);
       this.camera.fov = 55;
     } else {
-      this.camera.position.set(game.player.x * S, ownVehicle ? 2.5 : EYE_HEIGHT, game.player.y * S);
+      this.camera.position.set(game.player.x * S, (game.player.z || 0) * S + (ownVehicle && ownVehicle.type !== "helicopter" ? 2.5 : EYE_HEIGHT), game.player.y * S);
       this.camera.rotation.set(-(game.player.pitch || 0), -game.player.angle - Math.PI / 2, 0);
       this.camera.fov = verticalFov(game.player.scoped ? SCOPED_FOV : FOV, this.camera.aspect);
       if (game.shake > 0) this.camera.rotation.z = Math.sin(this.animationTime * 120) * game.shake * .006;
@@ -167,12 +182,12 @@ export class Renderer {
     this.sun.position.copy(this.camera.position).add(this.sunOffset);
     this.sun.target.position.set(this.camera.position.x, 0, this.camera.position.z);
     this.effects.root.visible = !preview;
-    if (!preview) this.effects.update(game, delta, this.camera);
+    if (!preview) this.effects.update(game.bio ? { ...game, player: game.player, projectiles: [...game.projectiles, ...(game.bio.rockets || [])] } : game, delta, this.camera);
     this.scene.fog.density = this.effects.insideSmoke && !preview ? .14 : .006;
     this.composer.render(delta);
     if (!preview) {
       this.viewmodel.update(game, motion, delta, this.camera.aspect);
-      if (this.viewmodel.scene.visible && !ownVehicle) {
+      if (this.viewmodel.scene.visible && (!ownVehicle || ownVehicle.type === "helicopter")) {
         this.camera.getWorldDirection(this.forward);
         this.raycaster.set(this.camera.position, this.forward);
         this.raycaster.far = 1.5;
@@ -202,7 +217,11 @@ export class Renderer {
     if (this.lowPerformanceSamples >= 2) { scale = Math.max(.6, scale - .15); this.lowPerformanceSamples = 0; }
     if (this.highPerformanceSamples >= 4) { scale = Math.min(1, scale + .1); this.highPerformanceSamples = 0; }
     if (scale !== this.pixelScale) { this.pixelScale = scale; this.resize(); }
-    this.stats = { fps: Math.round(fps), calls: this.webgl.info.render.calls, triangles: this.webgl.info.render.triangles, scale: this.pixelScale };
+    this.stats = {
+      fps: Math.round(fps), calls: this.webgl.info.render.calls, triangles: this.webgl.info.render.triangles, scale: this.pixelScale,
+      skinnedActors: [...this.actors.values()].filter(model => model.skinned).length,
+      titans: [...this.bioScene.models.values()].filter(model => model.root.visible).map(model => ({ x: model.root.position.x / S, y: model.root.position.z / S, source: model.source })),
+    };
     this.canvas.dispatchEvent(new CustomEvent("render-stats", { detail: this.stats }));
     this.sampleTime = this.sampleFrames = 0;
   }
@@ -214,6 +233,8 @@ export class Renderer {
     this.canvas.removeEventListener("webglcontextlost", this.onContextLost);
     this.canvas.removeEventListener("webglcontextrestored", this.onContextRestored);
     this.battlefield?.dispose(); this.effects.dispose(); this.viewmodel.dispose(); this.modelBatch.dispose();
+    for (const actor of this.actors.values()) actor.dispose?.();
+    this.characters.dispose(); this.bioScene.dispose();
     this.composer.dispose(); this.environment.dispose(); this.resources.dispose(); this.webgl.dispose();
     this.scene.clear();
   }

@@ -160,6 +160,11 @@ export class Battlefield {
         batch.add("rock", grass, [x * S, .09, z * S], [.15, .2, .2], [0, i, 0]);
       }
     }
+    for (const debris of map.rubble || []) batch.add("rock", concrete, [debris.x * S, .15, debris.y * S], [debris.size, .3, debris.size * .6], [.3, debris.x, .2]);
+    if (!wild) {
+      const water = material("harbor-water", "#365960", .21, .65);
+      batch.add("box", water, [width / 2, -.025, -37], [width + 80, .04, 68]);
+    }
     batch.finish();
     const parts = this.colliders.map(({ position, scale }) => {
       const part = new THREE.BoxGeometry(...scale);

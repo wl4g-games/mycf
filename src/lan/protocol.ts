@@ -11,6 +11,7 @@ export type LanAction = [type: string, value?: unknown];
 export interface LanVector2 {
   x: number;
   y: number;
+  z?: number;
 }
 
 export interface LanAim {
@@ -27,6 +28,8 @@ export interface LanPlayerProfile {
 }
 
 export interface LanRoomState {
+  battleModeId?: string;
+  bioDuration?: number;
   id: string;
   ownerId: string;
   mapId: string;
@@ -49,6 +52,7 @@ export interface LanInputMessage {
 }
 
 export interface LanActorState {
+  z?: number;
   id: string;
   userId: string | null;
   isBot: boolean;
@@ -75,6 +79,8 @@ export interface LanActorState {
 }
 
 export interface LanVehicleState {
+  z?: number;
+  weaponSlot?: string;
   id: string;
   type: string;
   x: number;
@@ -117,6 +123,9 @@ export interface LanFeedEntry {
 }
 
 export interface LanSnapshot {
+  battleModeId?: string;
+  bioDuration?: number;
+  bio?: unknown;
   mapId: string;
   modeId: string;
   conditionId: string;
@@ -207,7 +216,8 @@ export interface LanRankingEntry {
 }
 
 export interface LanMatchResult {
-  winner: LanTeam;
+  winner: LanTeam | "humans" | "monsters";
+  battleModeId?: string;
   score: Record<LanTeam, number>;
   conditionId: string;
   killTarget: number;
@@ -286,6 +296,8 @@ export interface LanPeerDebug {
 }
 
 export interface LanRoomSettings {
+  battleModeId?: string;
+  bioDuration?: number;
   mapId: string;
   modeId: string;
   conditionId: string;

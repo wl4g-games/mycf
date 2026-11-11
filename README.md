@@ -21,24 +21,42 @@ Two maps · 两张地图 · Four battle sizes · 四种规模 · Four loadouts �
 
 ## About · 游戏简介
 
-Strike Operations is a real-time 3D H5 first-person shooter powered by Three.js 0.187.0, PBR materials, shadow-mapped sunlight, articulated mesh combatants, and independently aimed armored vehicles. GPU instancing batches static scenery and combat effects; three-mesh-bvh 0.9.18 accelerates nearby cover queries; postprocessing 6.39.6 provides SMAA, restrained bloom and ACES filmic tone mapping. Maps use original procedural geometry and generated material textures. Solo, authoritative Node.js WebSocket play, and server-free WebRTC LAN play share existing game rules.
+Strike Operations is a real-time 3D H5 first-person shooter powered by Three.js 0.187.0, PBR materials, shadow-mapped sunlight, textured skinned combatants with blended locomotion, and independently aimed armored vehicles. GPU instancing batches static scenery and combat effects; three-mesh-bvh 0.9.18 accelerates nearby cover queries; postprocessing 6.39.6 provides SMAA, restrained bloom and ACES filmic tone mapping. Maps use original procedural geometry and generated material textures. Solo, authoritative Node.js WebSocket play, and server-free WebRTC LAN play share existing game rules.
 
-《战术行动》是一款基于 Three.js 0.187.0 的实时 3D H5 第一人称射击游戏，采用 PBR 材质、太阳光阴影、关节式网格角色与独立炮塔装甲载具。静态场景和战斗效果通过 GPU 实例化合批，three-mesh-bvh 0.9.18 加速近距离掩体查询，postprocessing 6.39.6 提供 SMAA 抗锯齿、克制的泛光与 ACES 电影色调映射。地图使用原创程序化几何体与生成材质纹理，单机、服务器权威 WebSocket 网络模式和无中心服务器 WebRTC 局域网模式共用现有作战规则。
+《战术行动》是一款基于 Three.js 0.187.0 的实时 3D H5 第一人称射击游戏，采用 PBR 材质、太阳光阴影、贴图骨骼角色与混合步态与独立炮塔装甲载具。静态场景和战斗效果通过 GPU 实例化合批，three-mesh-bvh 0.9.18 加速近距离掩体查询，postprocessing 6.39.6 提供 SMAA 抗锯齿、克制的泛光与 ACES 电影色调映射。地图使用原创程序化几何体与生成材质纹理，单机、服务器权威 WebSocket 网络模式和无中心服务器 WebRTC 局域网模式共用现有作战规则。
 
 ## Rendering · 三维渲染
 
-The live battlefield replaces the former Canvas ray-casting view, including the orbiting deployment preview. Rendering uses WebGL 2 with automatic resolution scaling, pooled effects, shared GPU resources and explicit map disposal. Only the minimap uses Canvas 2D. Mouse and touch aim support vertical rotation; solo, WebSocket and LAN inputs all carry the same pitch for target elevation checks. Gameplay movement and navigation remain on a horizontal map; this change does not add climbing, jumping, streamed open worlds, or imported photogrammetry assets.
+The live battlefield replaces the former Canvas ray-casting view, including the orbiting deployment preview. Rendering uses WebGL 2 with automatic resolution scaling, pooled effects, shared GPU resources and explicit map disposal. Only the minimap uses Canvas 2D. Mouse and touch aim support vertical rotation; solo, WebSocket and LAN inputs all carry the same pitch for target elevation checks. Infantry navigation uses a horizontal collision grid; biohazard helicopters add bounded altitude flight and shoot from their actual elevation. Streamed open worlds, infantry climbing/jumping, and photogrammetry are not implemented.
 
-实时战场和部署预览均已替换原来的 Canvas 射线投影，采用 WebGL 2、自动分辨率调节、固定容量效果池、共享 GPU 资源与显式地图资源释放，仅小地图保留 Canvas 2D。鼠标与触屏支持上下转动视角，单机、WebSocket 与局域网模式均传递俯仰角进行目标高度检查。移动和导航仍在水平地图上，本次未加入攀爬、跳跃、流式开放世界或摄影测量模型。
+实时战场和部署预览均已替换原来的 Canvas 射线投影，采用 WebGL 2、自动分辨率调节、固定容量效果池、共享 GPU 资源与显式地图资源释放，仅小地图保留 Canvas 2D。鼠标与触屏支持上下转动视角，单机、WebSocket 与局域网模式均传递俯仰角进行目标高度检查。步兵导航使用水平碰撞网格，生化模式中的直升机支持有限高度飞行，并按真实高度射击；尚未加入流式开放世界、步兵攀爬跳跃或摄影测量模型。
 
-Run `npm run dev` and open the displayed URL. A WebGL 2 browser with hardware acceleration is required. For browser smoke tests, keep the dev server running, then use `npm run test:e2e`; set `CHROME_BIN` for your installed Chrome/Chromium executable and `MYCF_TEST_URL` for a different server URL. Screenshots are kept in a printed temporary directory. The smoke test covers both maps, 16v16, movement/fire, weapon switching and mobile resizing.
+Run `npm run dev` and open the displayed URL. A WebGL 2 browser with hardware acceleration is required. For browser smoke tests, keep the dev server running, then use `npm run test:e2e`; set `CHROME_BIN` for your installed Chrome/Chromium executable and `MYCF_TEST_URL` for a different server URL. Screenshots are kept in a printed temporary directory. The smoke test covers both maps, 16v16, skinned character loading, desktop equipment buttons, mobile resizing, and a biohazard helicopter takeoff/weapon-switch/landing cycle.
 
-执行 `npm run dev` 并打开显示的地址，浏览器须支持 WebGL 2 并启用硬件加速。浏览器测试需保持开发服务器运行，再执行 `npm run test:e2e`；可用 `CHROME_BIN` 指定本机 Chrome/Chromium 执行文件，用 `MYCF_TEST_URL` 指定测试服务器。截图保存在输出的临时目录，覆盖双地图、16v16、移动开火、武器切换和手机尺寸。
+执行 `npm run dev` 并打开显示的地址，浏览器须支持 WebGL 2 并启用硬件加速。浏览器测试需保持开发服务器运行，再执行 `npm run test:e2e`；可用 `CHROME_BIN` 指定本机 Chrome/Chromium 执行文件，用 `MYCF_TEST_URL` 指定测试服务器。截图保存在输出的临时目录，覆盖双地图、16v16、骨骼角色加载、桌面武器按钮、手机尺寸，以及生化模式中的直升机起飞、切换武器与降落流程。
+
+## Biohazard · 生化模式
+
+Keep SOLO / ONLINE / LAN as the first setup choice. The second choice is TEAM MODE or BIOHAZARD, followed by the original four squad sizes. Biohazard uses Iron Harbor and makes every human-controlled and AI-controlled soldier an ally. Three original mutated reptilian titans emerge at separate randomized times, using a spacetime rift, the sea, or an underground rupture. Titans attack and collapse city buildings; demolished cover opens in both rendering and authoritative collision data.
+
+入口第一项保持单机／网络／局域网，第二项为团队模式／生化模式，第三项保留原有四种规模。生化模式使用钢铁港区，所有真人与 AI 士兵共同作战。三只原创变异爬行巨兽在不同的随机时刻，分别经时空隧道、海底或地下出场；巨兽会攻击并摧毁城市建筑，倒塌后的通路同时应用到画面与权威碰撞数据。
+
+Choose 3, 5 (default), or 10 minutes. Humans win only after killing all three titans before the deadline; surviving titans mean defeat at timeout. Two H-24 helicopters are available near the southern deployment area and eastern approach. Use F to enter, Space / C to ascend / descend, WASD and mouse to fly and aim, 1 for the machine gun, and 2 for explosive rockets. Land before exiting with F. Flight is limited to 25 m above ground level.
+
+可选择 3、5（默认）或 10 分钟；时限内击杀全部三只巨兽才算人类胜利，超时仍有巨兽存活则人类失败。南侧部署区与东侧通路附近各有一架 H-24 直升机。F 进入，空格／C 升降，WASD 与鼠标负责飞行及瞄准，1 切换机枪、2 切换高爆火箭弹；落地后才能按 F 离开。飞行高度上限为地面基准上方 25 米。
+
+The bottom-right weapon and backpack buttons are always visible, including macOS desktop browsers. Press Tab to release the aiming cursor for HUD clicks; press Tab again or click the battlefield to resume mouse aiming. Keyboard shortcuts 1 / 2 / 3 / B remain available.
+
+右下角始终显示武器与背包按钮，包含 macOS 桌面浏览器。按 Tab 释放瞄准光标后可点击 HUD，再按 Tab 或点击战场恢复鼠标瞄准；1／2／3／B 快捷键继续可用。
+
+Characters now load a packaged textured Mixamo soldier with independent skeletons and blended Idle / Walk / Run clips. Teams share geometry and textures; rigid weapon parts remain instanced. Character choices currently share the base armored mesh with profile scale and team material variations. The procedural model remains a loading fallback. Asset provenance and usage terms are recorded in [ATTRIBUTION.txt](assets/models/ATTRIBUTION.txt).
+
+角色现改为游戏内置的带贴图 Mixamo 士兵，具有独立骨骼与待机／行走／跑步混合动画；队伍共享几何体和贴图，刚性武器部件继续实例化合批。目前角色选项共用基础装甲网格，通过角色比例和阵营材质区分，加载期间保留程序化模型作为后备。资源来源与使用条款见 [ATTRIBUTION.txt](assets/models/ATTRIBUTION.txt)。
 
 ## Features · 核心功能
 
-- **Solo, online, and LAN · 单机、网络与局域网：** Choose the game type before selecting a map, team size, and loadout.<br>
-  进入部署界面后，先选择单机版、网络版或局域网版，再选择地图、队伍规模与作战背包。
+- **Solo, online, and LAN · 单机、网络与局域网：** Choose the game version, battle mode, squad size, map, and loadout.<br>
+  进入部署界面后，先选择单机版、网络版或局域网版，再选择战斗模式、队伍规模、地图与作战背包。
 - **Server-free LAN squad · 无中心服务局域网小队：** Players on the same Wi-Fi pair one by one with complete offer/answer QR codes. Human capacity follows the selected `NvN` mode, from two people in `1v1` through 32 in `16v16`; the host may start early after one client joins and AI fills every vacancy. The host browser runs authoritative simulation and connects directly to each client over WebRTC DataChannels, with no WebSocket or signaling server.<br>
   同一 Wi-Fi 下的玩家通过包含完整 Offer/Answer 的二维码逐一配对。真人容量跟随所选 `NvN` 模式，从 `1v1` 的 2 人一直到 `16v16` 的 32 人；连接一名客户端后房主即可提前开局，其余席位由 AI 补齐。房主浏览器执行权威模拟，并通过 WebRTC DataChannel 与每名客户端直连，全程不使用 WebSocket 或信令服务器。
 - **AI replacement · AI 补位：** Every other slot in solo mode is controlled by an AI NPC; online room owners may start before all human slots are filled, and AI automatically fills every vacancy on both teams.<br>

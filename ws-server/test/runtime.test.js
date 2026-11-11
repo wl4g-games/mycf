@@ -263,3 +263,38 @@ test("Vercel configuration enables Fluid compute for the container function", as
   assert.equal("functions" in config, false);
   assert.equal("rewrites" in config, false);
 });
+
+test("bio rules, helicopter altitude, rockets and timeout results survive the real WebSocket transport", async t => {
+  const runtime = createGameServer();
+  const address = await listen(runtime.server);
+  t.after(async () => {
+    await runtime.stop();
+    await new Promise(resolve => runtime.server.close(resolve));
+  });
+  const socket = await connectClient(`ws://127.0.0.1:${address.port}/ws`);
+  await sendAndReceive(socket, "register", { alias: "BioPilot", loadoutId: "raider" }, "registered");
+  const { room } = await sendAndReceive(socket, "create_room", { battleModeId: "bio", bioDuration: 180, modeId: "1v1", mapId: "city" }, "room_state");
+  assert.equal(room.battleModeId, "bio");
+  assert.equal(room.timeLimit, 180);
+  const start = await sendAndReceive(socket, "start_room", {}, "match_start");
+  assert.equal(start.duration, 180);
+  let snapshot = await messageFrom(socket, "snapshot");
+  assert.equal(snapshot.bio.monsters.length, 3);
+  const helicopter = snapshot.vehicles.find(vehicle => vehicle.type === "helicopter");
+  socket.send(JSON.stringify({ type: "match_input", payload: { angle: -Math.PI / 2, pitch: -.2, movement: { x: 0, y: 0, z: 1 }, actions: [["interact", helicopter.id]] } }));
+  for (let i = 0; i < 10; i++) {
+    snapshot = await messageFrom(socket, "snapshot");
+    if (snapshot.vehicles.find(vehicle => vehicle.id === helicopter.id).z > .2) break;
+  }
+  assert.ok(snapshot.vehicles.find(vehicle => vehicle.id === helicopter.id).z > .2);
+  assert.ok(snapshot.actors.find(actor => actor.id === snapshot.playerId).z > .2);
+  socket.send(JSON.stringify({ type: "match_input", payload: { movement: { x: 0, y: 0 }, actions: [["weaponSlot", "secondary"], ["fire"]] } }));
+  snapshot = await messageFrom(socket, "snapshot");
+  assert.equal(snapshot.vehicles.find(vehicle => vehicle.id === helicopter.id).weaponSlot, "secondary");
+  assert.ok(snapshot.bio.rockets.length > 0);
+  const finished = messageFrom(socket, "match_end");
+  runtime.lobby.rooms.get(room.id).match.deadline = performance.now() - 1;
+  const result = await finished;
+  assert.equal(result.winner, "monsters");
+  assert.ok(result.rankings.every(entry => entry.result === "loss"));
+});

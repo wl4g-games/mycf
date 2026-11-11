@@ -71,6 +71,7 @@ export class InputController {
     this.touchAim = new TouchAimState();
     this.moveTouch = null;
     this.touchMovement = { x: 0, y: 0 };
+    this.flightPointers = new Map();
     this.bindKeyboard();
     this.bindMouse();
     this.bindTouch();
@@ -86,6 +87,7 @@ export class InputController {
       if (event.code === "KeyB") this.items.push(["backpack"]);
       if (event.code === "KeyF") this.items.push(["interact"]);
       if (event.code === "Escape") this.items.push(["pause"]);
+      if (["Space", "ControlLeft", "KeyC"].includes(event.code) && event.target === document.body) event.preventDefault();
     });
     window.addEventListener("keyup", event => this.keys.delete(event.code));
   }
@@ -207,7 +209,11 @@ export class InputController {
     const x = (this.keys.has("KeyD") ? 1 : 0) - (this.keys.has("KeyA") ? 1 : 0) + this.touchMovement.x;
     const y = (this.keys.has("KeyS") ? 1 : 0) - (this.keys.has("KeyW") ? 1 : 0) + this.touchMovement.y;
     const length = Math.hypot(x, y);
-    return length > 1 ? { x: x / length, y: y / length } : { x, y };
+    const movement = length > 1 ? { x: x / length, y: y / length } : { x, y };
+    const z = (this.keys.has("Space") ? 1 : 0) - (this.keys.has("ControlLeft") || this.keys.has("KeyC") ? 1 : 0)
+      + [...(this.flightPointers?.values() || [])].reduce((sum, value) => sum + value, 0);
+    if (z) movement.z = Math.max(-1, Math.min(1, z));
+    return movement;
   }
 
   consume() {
@@ -224,6 +230,7 @@ export class InputController {
   }
 
   resetTransient() {
+    this.flightPointers?.clear();
     this.keys.clear();
     this.items.length = 0;
     this.yaw = 0;

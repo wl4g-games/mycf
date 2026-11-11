@@ -1,4 +1,4 @@
-import { GAME_MODES, MATCH_CONDITIONS } from "../../ws-server/src/game-config.js";
+import { GAME_MODES, MATCH_CONDITIONS, resolveMatchCondition } from "../../ws-server/src/game-config.js";
 import { AuthoritativeMatch } from "../../ws-server/src/match.js";
 
 import {
@@ -77,13 +77,15 @@ export class LanHost extends LanEventEmitter {
     const modes = GAME_MODES as Record<string, (typeof GAME_MODES)[keyof typeof GAME_MODES]>;
     const conditions = MATCH_CONDITIONS as Record<string, (typeof MATCH_CONDITIONS)[keyof typeof MATCH_CONDITIONS]>;
     const mode = modes[settings.modeId] || GAME_MODES["4v4"];
-    const condition = conditions[settings.conditionId] || MATCH_CONDITIONS.standard;
+    const condition = resolveMatchCondition(settings);
     this.room = {
       id: this.roomId,
       ownerId: this.self.id,
-      mapId: settings.mapId,
+      mapId: settings.battleModeId === "bio" ? "city" : settings.mapId,
       modeId: mode.id,
       conditionId: condition.id,
+      battleModeId: settings.battleModeId === "bio" ? "bio" : "team",
+      bioDuration: condition.timeLimit,
       killTarget: condition.killTarget,
       timeLimit: condition.timeLimit,
       status: "waiting",

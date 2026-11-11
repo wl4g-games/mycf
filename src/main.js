@@ -15,6 +15,8 @@ import { NetworkGameState } from "./network-game.js?v=20261008-grenade-v11";
 import { ParentalControl } from "./parental/index.js?v=20261008-grenade-v11";
 import { ParentalControlView } from "./parental/view.js?v=20261008-grenade-v11";
 import { Renderer } from "./renderer.js?v=20261008-grenade-v11";
+import { bindEquipmentControls, updateEquipmentControls } from "./equipment-controls.js";
+import { helicopterWeapon } from "../ws-server/src/bio-mode.js";
 import { LocalGameSetupRepository } from "./repositories/game-setup-repository.js?v=20261008-grenade-v11";
 import { LocalParentalControlRepository } from "./repositories/parental-control-repository.js?v=20261008-grenade-v11";
 import { LocalRoomStateRepository } from "./repositories/room-state-repository.js?v=20261008-grenade-v11";
@@ -38,6 +40,7 @@ const forceCancelButton = $("#force-cancel");
 const forceConfirmButton = $("#force-confirm");
 const audio = new GameAudio({ translate: t, locale: getLocale });
 const input = new InputController(canvas);
+bindEquipmentControls(input);
 let renderer;
 try {
   renderer = new Renderer(canvas, $("#radar"));
@@ -68,6 +71,7 @@ let lanUnsubscribe = [];
 let lanSignalHandler = null;
 let lanSignalNext = null;
 let paused = false;
+let hudCursor = false;
 let modalMode = "pause";
 let announcementTimer = 0;
 let lastTime = performance.now();
@@ -91,6 +95,7 @@ function handleGameEvent(type, payload) {
     if (payload.actorId === localPlayerId && !["knife", "axe", "bow"].includes(payload.profile)) pulseReticleFlash();
   }
   if (type === "grenade_throw" && game.player) audio.grenadeThrow(payload, game.player);
+  if (type === "explosion" && game.player) audio.explosion(payload.explosionType, { source: payload, listener: game.player });
   if (type === "announce") announce(localizeAnnouncement(payload));
   if (type === "death") {
     modalMode = "death";
@@ -131,6 +136,7 @@ function weaponName(weaponId) {
 function localizeAnnouncement(payload) {
   if (typeof payload === "string") return payload;
   if (!payload?.key) return "";
+  if (payload.key === "bio.emerging") return t(payload.key, { ...payload.params, source: t(`bio.source.${payload.params.source}`) });
   if (payload.key === "announce.loadoutChanged") {
     const loadout = LOADOUTS[payload.loadoutId] || LOADOUTS.recon;
     return t(payload.key, { number: loadout.number, name: loadoutName(loadout) });
@@ -247,9 +253,16 @@ function renderSetupPreferences() {
 
 function syncRoomRuleControls(room) {
   const locked = Boolean(room);
-  $$('[data-version], [data-map], [data-mode]').forEach(button => { button.disabled = locked; });
+  $$('[data-version], [data-map], [data-mode], [data-battle-mode]').forEach(button => { button.disabled = locked; });
   $("#match-condition").disabled = locked;
   const rules = room || selected;
+  const bio = rules.battleModeId === "bio";
+  selectOption("[data-battle-mode]", $(`[data-battle-mode="${bio ? "bio" : "team"}"]`));
+  $("#bio-duration-control").classList.toggle("is-hidden", !bio);
+  $("#bio-duration").value = String(rules.bioDuration || 300);
+  $("#bio-duration").disabled = locked;
+  $("#match-condition").closest("label").classList.toggle("is-hidden", bio);
+  $('[data-map="wild"]').disabled = locked || bio;
 
   if (MAPS[rules.mapId]) {
     selectOption("[data-map]", $(`[data-map="${rules.mapId}"]`));
@@ -306,6 +319,12 @@ $$('[data-mode]').forEach(button => bindTap(button, () => {
   saveSetup({ modeId: button.dataset.mode });
   selectOption("[data-mode]", button);
 }));
+
+$$('[data-battle-mode]').forEach(button => bindTap(button, () => {
+  saveSetup({ battleModeId: button.dataset.battleMode, ...(button.dataset.battleMode === "bio" ? { mapId: "city" } : {}) });
+  syncRoomRuleControls(null);
+}));
+$("#bio-duration").addEventListener("change", event => saveSetup({ bioDuration: Number(event.target.value) }));
 
 function renderConditionOptions() {
   const select = $("#match-condition");
@@ -394,7 +413,7 @@ function createNetworkRoom() {
   if (!network.self) { showAliasModal(); return; }
   if (network.room) return;
   network.updateProfile(selected.loadoutId, selected.characterId);
-  network.createRoom({ mapId: selected.mapId, modeId: selected.modeId, conditionId: selected.conditionId });
+  network.createRoom({ mapId: selected.mapId, modeId: selected.modeId, conditionId: selected.conditionId, battleModeId: selected.battleModeId, bioDuration: selected.bioDuration });
   startButton.disabled = true;
   startButton.querySelector("span").textContent = t("start.creatingRoom");
 }
@@ -471,6 +490,8 @@ function createLanRoom() {
     mapId: selected.mapId,
     modeId: selected.modeId,
     conditionId: selected.conditionId,
+    battleModeId: selected.battleModeId,
+    bioDuration: selected.bioDuration,
   });
   bindLanSession(host);
   $("#lan-status").textContent = t("lan.hostReady");
@@ -738,6 +759,7 @@ function renderPendingInvite() {
 }
 
 function winnerMessage(result) {
+  if (result.battleModeId === "bio") return t(result.winner === "humans" ? "bio.win" : "bio.loss");
   return t(result.winner === TEAM.SEAL ? "ranking.guardiansWin" : "ranking.infiltratorsWin");
 }
 
@@ -753,7 +775,7 @@ function rankingName(entry) {
 
 function renderPodium(result) {
   const localTeam = game.player?.team || TEAM.SEAL;
-  const won = result.winner === localTeam;
+  const won = result.battleModeId === "bio" ? result.winner === "humans" : result.winner === localTeam;
   $("#podium-title").textContent = t(won ? "modal.finish.win.title" : "modal.finish.loss.title");
   $("#podium-result").textContent = winnerMessage(result);
   $("#podium-seal-score").textContent = pad(result.score.seal, 2);
@@ -762,7 +784,7 @@ function renderPodium(result) {
   $("#podium-local-stats").textContent = t("podium.localStats", localEntry);
   const root = $("#podium-players");
   root.replaceChildren();
-  alliedPodium(result.rankings, localTeam).forEach((entry, index) => {
+  alliedPodium(result.rankings, result.battleModeId === "bio" ? null : localTeam).forEach((entry, index) => {
     const place = index + 1;
     const card = document.createElement("article");
     card.className = `podium-player place-${place}`;
@@ -996,7 +1018,10 @@ function updateHud(dt) {
   $("#local-kills").textContent = stats.local.kills;
   $("#local-deaths").textContent = stats.local.deaths;
   $("#clock").textContent = formatTime(game.time);
-  $("#match-limit").textContent = t("hud.scoreLimit", { score: game.rules.killTarget, mode: game.mode.label });
+  $("#match-limit").textContent = game.bio ? t("bio.progress", { count: game.bio.defeated }) : t("hud.scoreLimit", { score: game.rules.killTarget, mode: game.mode.label });
+  $("#bio-objective").classList.toggle("is-hidden", !game.bio);
+  if (game.bio) $("#bio-objective").textContent = t("bio.objective", { count: game.bio.defeated, active: game.bio.monsters.filter(monster => monster.active && monster.alive).length, buildings: game.bio.destroyed.length });
+  updateEquipmentControls(game, t);
   $("#health").textContent = Math.ceil(game.player.health);
   $("#health-fill").style.width = `${Math.max(0, game.player.health)}%`;
   $("#health-fill").style.background = game.player.health < 35 ? "#ff654e" : "#5ce5ff";
@@ -1029,10 +1054,11 @@ function updateWeaponPanel() {
   const vehicle = game.currentVehicle;
   if (vehicle) {
     const profile = VEHICLE_TYPES[vehicle.type] || VEHICLE_TYPES.tank;
+    const weapon = vehicle.type === "helicopter" ? helicopterWeapon(vehicle) : profile.weapon;
     $("#weapon-slot").textContent = t(profile.hudSlotKey);
-    $("#weapon-name").textContent = t(profile.weapon.nameKey);
-    $("#weapon-mode").textContent = t(profile.weapon.modeKey);
-    $("#throwable-name").textContent = t(profile.weapon.ammoKey);
+    $("#weapon-name").textContent = t(weapon.nameKey);
+    $("#weapon-mode").textContent = t(weapon.modeKey);
+    $("#throwable-name").textContent = t(weapon.ammoKey);
   } else {
     const slots = { primary: "hud.weapon.primary", secondary: "hud.weapon.secondary", melee: "hud.weapon.melee" };
     $("#weapon-slot").textContent = t(slots[game.player.weaponSlot] || "hud.weapon.primary");
@@ -1100,7 +1126,7 @@ function frame(now) {
   if (parentalTick.justLocked) parentalView.openQuiz();
   else if (game.started && !game.finished) parentalView.ensureBlocking();
   lanSession?.tick(elapsedSeconds);
-  if (!paused) game.update(dt, { ...state, items: forwarded });
+  if (!paused) game.update(dt, { ...state, items: forwarded }, elapsedSeconds);
   if (game.started) audio.updateWorld(game, paused ? 0 : dt);
   renderer.setPreviewMap(selected.mapId);
   renderer.render(game, paused ? 0 : dt, { preview: !landing.classList.contains("is-hidden"), frameTime: elapsedSeconds });
@@ -1198,6 +1224,13 @@ window.addEventListener("keydown", event => {
   if (forcePromptOpen) return;
   const unmodifiedKey = !event.ctrlKey && !event.metaKey && !event.altKey;
   const battleShortcut = unmodifiedKey && game.started && !game.finished && aliasModal.classList.contains("is-hidden");
+  if (battleShortcut && !paused && event.code === "Tab" && !event.repeat) {
+    event.preventDefault();
+    hudCursor = !hudCursor;
+    input.resetTransient();
+    if (hudCursor) exitPointerLock(); else lockPointer();
+    return;
+  }
   if (battleShortcut && !event.repeat && event.code === "KeyX") {
     event.preventDefault();
     handleFullscreenToggle();
@@ -1214,9 +1247,10 @@ window.addEventListener("keydown", event => {
   else if (!modal.classList.contains("is-hidden") && modalMode !== "death") resume();
 });
 document.addEventListener("pointerlockchange", () => {
+  if (document.pointerLockElement === canvas) hudCursor = false;
   if (!game.started || game.finished || touchDevice) return;
   if (parentalView.isQuizOpen() || parentalView.isSettingsOpen()) return;
-  if (forcePromptOpen || fullscreenTransition) return;
+  if (forcePromptOpen || fullscreenTransition || hudCursor) return;
   if (document.pointerLockElement !== canvas && modalMode !== "death") {
     pauseBattle();
   }

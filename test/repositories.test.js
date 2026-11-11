@@ -45,6 +45,8 @@ test("game setup repository validates every persisted deployment choice", () => 
     conditionId: "marathon",
     alias: "  Agent   Seven  ",
   }), {
+    battleModeId: "team",
+    bioDuration: 300,
     versionId: "network",
     mapId: "wild",
     modeId: "16v16",

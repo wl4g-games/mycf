@@ -181,7 +181,7 @@ export class LobbyService {
 
   createRoom(client, payload) {
     if (client.roomId) return this.error(client, "IN_ROOM", "Leave the current room first.");
-    const mapId = MAPS[payload.mapId] ? payload.mapId : "city";
+    const mapId = payload.battleModeId === "bio" ? "city" : MAPS[payload.mapId] ? payload.mapId : "city";
     const modeId = GAME_MODES[payload.modeId] ? payload.modeId : "4v4";
     const rules = resolveMatchCondition(payload);
     let id = roomCode();
@@ -192,6 +192,8 @@ export class LobbyService {
       mapId,
       modeId,
       conditionId: rules.id,
+      battleModeId: rules.battleModeId || "team",
+      bioDuration: rules.timeLimit,
       killTarget: rules.killTarget,
       timeLimit: rules.timeLimit,
       status: "waiting",
@@ -379,6 +381,8 @@ export class LobbyService {
       mapId: room.mapId,
       modeId: room.modeId,
       conditionId: room.conditionId,
+      battleModeId: room.battleModeId || "team",
+      bioDuration: room.bioDuration || 300,
       killTarget: room.killTarget,
       timeLimit: room.timeLimit,
       status: room.status,

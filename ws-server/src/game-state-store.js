@@ -47,6 +47,8 @@ export class GameStateStore {
       mapId: room.mapId,
       modeId: room.modeId,
       conditionId: room.conditionId,
+      battleModeId: room.battleModeId || "team",
+      bioDuration: room.bioDuration || 300,
       killTarget: room.killTarget,
       timeLimit: room.timeLimit,
       status: room.status,
