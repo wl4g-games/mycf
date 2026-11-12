@@ -25,6 +25,7 @@ export class RenderResources {
         cylinder: () => new THREE.CylinderGeometry(1, 1, 1, 12),
         cone: () => new THREE.ConeGeometry(1, 1, 9),
         foliage: () => new THREE.ConeGeometry(1, 1, 12, 3),
+        torus: () => new THREE.TorusGeometry(1, .065, 8, 40),
         rock: () => {
           const geometry = new THREE.IcosahedronGeometry(1, 2);
           const positions = geometry.attributes.position;
@@ -57,6 +58,7 @@ export class RenderResources {
       if (kind === "earth") value = 125 + grain * 90 + Math.sin(x * .16) * 12;
       if (kind === "concrete") value -= (y % 64 < 2 ? 55 : 0) + (x % 128 < 2 ? 30 : 0);
       if (kind === "metal") value -= x % 22 < 3 ? 60 : 0;
+      if (kind === "scales") value = 110 + grain * 50 + Math.sin(x * .4 + (Math.floor(y / 16) % 2) * 2) * 20 - (y % 16 < 2 ? 30 : 0);
       const index = (y * size + x) * 4;
       image.data[index] = image.data[index + 1] = image.data[index + 2] = value;
       image.data[index + 3] = 255;

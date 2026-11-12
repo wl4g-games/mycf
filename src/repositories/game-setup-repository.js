@@ -6,6 +6,7 @@ import {
   LOADOUTS,
   MAPS,
   MATCH_CONDITIONS,
+  resolveBattleSettings,
 } from "../config.js";
 import { LocalJsonRepository } from "./local-json-repository.js";
 
@@ -19,6 +20,8 @@ export const DEFAULT_GAME_SETUP = Object.freeze({
   characterId: DEFAULT_CHARACTER_ID,
   conditionId: DEFAULT_CONDITION_ID,
   alias: "",
+  battleModeId: "team",
+  bioDuration: 300,
 });
 
 const VERSION_IDS = new Set(["solo", "network", "lan"]);
@@ -36,8 +39,9 @@ function normalizeAlias(value) {
 export function normalizeGameSetup(value = {}) {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   return {
+    ...resolveBattleSettings(source),
     versionId: VERSION_IDS.has(source.versionId) ? source.versionId : DEFAULT_GAME_SETUP.versionId,
-    mapId: knownId(MAPS, source.mapId, DEFAULT_GAME_SETUP.mapId),
+    mapId: source.battleModeId === "bio" ? "city" : knownId(MAPS, source.mapId, DEFAULT_GAME_SETUP.mapId),
     modeId: knownId(GAME_MODES, source.modeId, DEFAULT_GAME_SETUP.modeId),
     loadoutId: knownId(LOADOUTS, source.loadoutId, DEFAULT_GAME_SETUP.loadoutId),
     characterId: knownId(CHARACTER_PROFILES, source.characterId, DEFAULT_GAME_SETUP.characterId),

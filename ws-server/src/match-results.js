@@ -21,12 +21,13 @@ export function createMatchResult(actors, winner, score, condition = {}) {
       kd: numericStat(actor.kills) / Math.max(1, numericStat(actor.deaths)),
       damage: Math.round(numericStat(actor.damage)),
       points: rankingPoints(actor),
-      result: actor.team === winner ? "win" : "loss",
+      result: (condition.battleModeId === "bio" ? winner === "humans" : actor.team === winner) ? "win" : "loss",
     }))
     .sort((a, b) => b.points - a.points || b.kills - a.kills || a.deaths - b.deaths || a.name.localeCompare(b.name))
     .map((entry, index) => ({ ...entry, rank: index + 1 }));
   return {
     winner,
+    battleModeId: condition.battleModeId || "team",
     score: { ...score },
     conditionId: condition.id,
     killTarget: condition.killTarget,
@@ -49,7 +50,7 @@ export function summarizeActorStats(actors, localActorId) {
 
 export function alliedPodium(rankings, team, limit = 3) {
   return (rankings || [])
-    .filter(entry => entry.team === team)
+    .filter(entry => !team || entry.team === team)
     .sort((left, right) => right.kills - left.kills
       || left.deaths - right.deaths
       || right.damage - left.damage

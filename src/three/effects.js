@@ -61,8 +61,8 @@ export class BattlefieldEffects {
     this.transform.quaternion.identity();
     count = 0;
     for (const projectile of (game.projectiles || []).slice(0, 128)) {
-      const size = projectile.type === "shell" ? .07 : .1;
-      this.instance(this.projectiles, count++, worldPoint(projectile), [size, size, size], projectile.type === "shell" ? "#ffdc8e" : "#677363");
+      const size = projectile.type === "rocket" ? .15 : projectile.type === "shell" ? .07 : .1;
+      this.instance(this.projectiles, count++, worldPoint(projectile), [size, size, size], ["shell", "rocket"].includes(projectile.type) ? "#ffdc8e" : "#677363");
     }
     this.projectiles.count = count;
     let smokeCount = 0, sparkCount = 0;

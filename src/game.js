@@ -5,6 +5,7 @@ import {
 } from "./config.js?v=20261008-grenade-v11";
 import { applyCameraPitch } from "./camera.js?v=20261008-grenade-v11";
 import { createShotEvent, withinTargetElevation } from "./shot-geometry.js?v=20261008-grenade-v11";
+import { BioBattle, helicopterWeapon } from "../ws-server/src/bio-mode.js";
 import {
   ACTOR_COLLISION_RADIUS, advanceVehicle, collidesWithActor, collidesWithVehicle, createVehicleStates,
   drivenVehicle, resolveInteractionVehicle, vehicleExitCandidates, vehicleProfile,
@@ -38,6 +39,7 @@ export class GameState {
     this.map = MAPS[this.settings.mapId] || MAPS.city;
     this.mode = GAME_MODES[this.settings.modeId] || GAME_MODES["4v4"];
     this.rules = resolveMatchCondition(this.settings);
+    if (this.rules.battleModeId === "bio") this.map = MAPS.city;
     this.time = this.rules.timeLimit;
     this.score = { [TEAM.SEAL]: 0, [TEAM.TERROR]: 0 };
     this.finished = false;
@@ -53,6 +55,8 @@ export class GameState {
     this.vehicles = createVehicleStates(this.map);
     this.syncVehicleAliases();
     this.createTeams();
+    this.bio = this.rules.battleModeId === "bio" ? new BioBattle(MAPS.city, this.actors.length, this.rules.timeLimit) : null;
+    if (this.bio) this.bio.attach(this);
   }
 
   syncVehicleAliases() {
@@ -109,10 +113,12 @@ export class GameState {
 
   start() { this.started = true; }
 
-  update(dt, input) {
+  update(dt, input, elapsed = dt) {
     if (!this.started || this.finished) return;
+    const clockDelta = this.bio ? Math.max(0, elapsed) : Math.min(dt, .05);
     dt = Math.min(dt, .05);
-    this.time = Math.max(0, this.time - dt);
+    this.time = Math.max(0, this.time - clockDelta);
+    if (this.bio && this.time <= 0) { this.finish("monsters"); return; }
     this.hitMarker = Math.max(0, this.hitMarker - dt);
     this.shake = Math.max(0, this.shake - dt * 3);
     this.flash = Math.max(0, this.flash - dt * 3);
@@ -127,6 +133,7 @@ export class GameState {
     this.updateBots(dt);
     this.updateProjectiles(dt);
     this.updateRespawns(dt);
+    this.bio?.update(this, dt, event => this.emit(event.type, event));
     this.effects = this.effects.filter(effect => (effect.life -= dt) > 0);
     this.feed = this.feed.filter(entry => (entry.life -= dt) > 0);
     if (this.time <= 0) this.finish(this.score.seal >= this.score.terror ? TEAM.SEAL : TEAM.TERROR);
@@ -135,6 +142,7 @@ export class GameState {
   handleAction([type, value]) {
     if (!this.player.alive) return;
     const driving = Boolean(this.currentVehicle);
+    if (type === "weaponSlot" && this.currentVehicle?.type === "helicopter") { this.currentVehicle.weaponSlot = value === "secondary" ? "secondary" : "primary"; return; }
     if (type === "weaponSlot" && !driving) this.selectSlot(this.player, value);
     if (type === "backpack" && !driving) this.cycleLoadout(this.player);
     if (type === "scope" && this.player.weaponId === "barrett" && !driving) {
@@ -174,6 +182,11 @@ export class GameState {
     this.player.cooldown = Math.max(0, this.player.cooldown - dt);
     const vehicle = this.currentVehicle;
     if (vehicle) {
+      if (vehicle.type === "helicopter") {
+        this.bio.fly(vehicle, this.player, movement, dt);
+        if (fireHeld) this.fireVehicle(this.player);
+        return;
+      }
       advanceVehicle(vehicle, movement, dt, (dx, dy, radius) => this.moveVehicle(vehicle, dx, dy, radius));
       this.player.x = vehicle.x;
       this.player.y = vehicle.y;
@@ -218,6 +231,7 @@ export class GameState {
   }
 
   findTargetInArc(actor, range, margin) {
+    if (this.bio) return this.bio.findTarget(actor, range, margin);
     let selected = null;
     let best = Infinity;
     for (const target of this.actors) {
@@ -267,6 +281,7 @@ export class GameState {
   toggleVehicle(actor, requestedId = null) {
     const active = drivenVehicle(this.vehicles, actor.id);
     if (active) {
+      if (active.type === "helicopter" && active.z > .5) return false;
       const exit = vehicleExitCandidates(active)
         .find(candidate => !this.collides(candidate.x, candidate.y, ACTOR_COLLISION_RADIUS, active.id)
           && !this.actors.some(other => other !== actor && other.alive
@@ -275,9 +290,9 @@ export class GameState {
       active.driverId = null;
       active.occupied = false;
       active.speed = 0;
-      Object.assign(actor, exit);
+      Object.assign(actor, exit, { z: 0 });
       if (actor.isPlayer) {
-        this.emit("announce", { key: active.type === "tank" ? "announce.leftTank" : "announce.leftArmoredCar" });
+        this.emit("announce", { key: active.type === "helicopter" ? "bio.leftHelicopter" : active.type === "tank" ? "announce.leftTank" : "announce.leftArmoredCar" });
       }
       return true;
     }
@@ -290,8 +305,9 @@ export class GameState {
     actor.scoped = false;
     actor.x = vehicle.x;
     actor.y = vehicle.y;
+    actor.z = vehicle.z || 0;
     if (actor.isPlayer) {
-      this.emit("announce", { key: vehicle.type === "tank" ? "announce.startedTank" : "announce.startedArmoredCar" });
+      this.emit("announce", { key: vehicle.type === "helicopter" ? "bio.enteredHelicopter" : vehicle.type === "tank" ? "announce.startedTank" : "announce.startedArmoredCar" });
     }
     return true;
   }
@@ -299,9 +315,15 @@ export class GameState {
   fireVehicle(actor) {
     const vehicle = drivenVehicle(this.vehicles, actor.id);
     if (!vehicle || vehicle.cooldown > 0) return false;
-    const weapon = vehicleProfile(vehicle).weapon;
+    const weapon = vehicle.type === "helicopter" ? helicopterWeapon(vehicle) : vehicleProfile(vehicle).weapon;
+    if (vehicle.type === "helicopter" && vehicle.weaponSlot === "secondary") {
+      vehicle.cooldown = weapon.interval;
+      this.bio.fireRocket(actor, vehicle);
+      this.commitShot(actor, { ...weapon, visual: "rocket" }, null, 0);
+      return true;
+    }
     vehicle.cooldown = weapon.interval;
-    if (weapon.kind === "hitscan") {
+    if (weapon.kind === "hitscan" || vehicle.type === "helicopter") {
       const victim = this.findTargetInArc(actor, weapon.range, weapon.spread);
       if (actor.isPlayer) {
         this.audio.weaponShot({ weaponId: weapon.id, profile: weapon.visual, hit: Boolean(victim) });
@@ -339,6 +361,7 @@ export class GameState {
   fireTank(actor) { return this.fireVehicle(actor); }
 
   updateBots(dt) {
+    if (this.bio) { this.bio.updateBots(this, dt); return; }
     for (const bot of this.actors) {
       if (!bot.isBot || !bot.alive) continue;
       bot.cooldown = Math.max(0, bot.cooldown - dt);
@@ -414,6 +437,7 @@ export class GameState {
     this.audio.explosion(type, { source: projectile, listener: this.player });
     this.shake = Math.max(this.shake, .78);
     if (!power) return;
+    this.bio?.blast(projectile, radius, power, projectile.owner, this);
     for (const actor of this.actors) {
       if (!actor.alive || actor.team === projectile.team) continue;
       const actorDistance = distance(actor, projectile);
@@ -424,6 +448,12 @@ export class GameState {
   }
 
   damage(target, amount, attacker, weapon) {
+    if (this.bio && target?.isMonster) {
+      this.bio.damage(target, amount, attacker, this);
+      if (attacker?.isPlayer) { this.hitMarker = .16; this.audio.hit(); }
+      return;
+    }
+    if (this.bio && !attacker?.isMonster) return;
     if (!target.alive || !attacker || target.team === attacker.team) return;
     const vehicle = drivenVehicle(this.vehicles, target.id);
     if (vehicle) {
@@ -454,7 +484,7 @@ export class GameState {
     victim.deaths += 1;
     victim.scoped = false;
     attacker.kills += 1;
-    this.score[attacker.team] += 1;
+    if (!this.bio) this.score[attacker.team] += 1;
     const entry = { killer: attacker.name, killerTeam: attacker.team, victim: victim.name, victimTeam: victim.team, weapon, life: 5 };
     this.feed.unshift(entry);
     this.feed = this.feed.slice(0, 6);
@@ -468,7 +498,7 @@ export class GameState {
     if (victim.isPlayer) {
       this.emit("death", { respawn: victim.respawn });
     }
-    if (this.score[attacker.team] >= this.rules.killTarget) this.finish(attacker.team);
+    if (!this.bio && this.score[attacker.team] >= this.rules.killTarget) this.finish(attacker.team);
   }
 
   updateRespawns(dt) {
@@ -486,6 +516,7 @@ export class GameState {
     actor.x = x + .5;
     actor.y = y + .5;
     actor.health = 100;
+    actor.z = 0;
     actor.alive = true;
     actor.cooldown = .6;
     actor.angle = actor.team === TEAM.SEAL ? -Math.PI / 2 : Math.PI / 2;

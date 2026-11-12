@@ -91,7 +91,7 @@ export class LanClient extends LanEventEmitter {
   }
 
   sendInput(input: {
-    movement?: { x?: number; y?: number };
+    movement?: { x?: number; y?: number; z?: number };
     angle?: number;
     pitch?: number;
     fireHeld?: boolean;
@@ -103,6 +103,7 @@ export class LanClient extends LanEventEmitter {
       move: {
         x: Number(input.movement?.x) || 0,
         y: Number(input.movement?.y) || 0,
+        ...(input.movement?.z ? { z: Number(input.movement.z) } : {}),
       },
       aim: {
         angle: Number(input.angle) || 0,

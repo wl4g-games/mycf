@@ -43,15 +43,12 @@
 
           <div id="deployment-options" class="deployment-options is-locked" aria-disabled="true">
             <section class="setup-group">
-              <p><b>02</b> <span data-i18n="setup.map.prompt">Choose map</span></p>
-              <div class="map-options">
-                <button type="button" class="map-option selected" data-map="city">
-                  <span data-i18n="map.city.name">IRON HARBOR</span><small data-i18n="map.city.subtitle">INDUSTRIAL PORT / URBAN COMBAT</small><i>CITY</i>
-                </button>
-                <button type="button" class="map-option" data-map="wild">
-                  <span data-i18n="map.wild.name">RIDGELINE</span><small data-i18n="map.wild.subtitle">MOUNTAIN OUTPOST / OPEN TERRAIN</small><i>WILDS</i>
-                </button>
+              <p><b>02</b> <span data-i18n="setup.battle.prompt">Choose battle mode</span></p>
+              <div class="battle-type-options">
+                <button type="button" class="version-option selected" data-battle-mode="team"><strong data-i18n="battle.team">TEAM MODE</strong><small data-i18n="battle.team.description">Squad versus squad, human or AI</small></button>
+                <button type="button" class="version-option" data-battle-mode="bio"><strong data-i18n="battle.bio">BIOHAZARD</strong><small data-i18n="battle.bio.description">Cooperate to defeat three emerging titans</small></button>
               </div>
+              <label id="bio-duration-control" class="match-condition is-hidden"><span data-i18n="bio.duration">MISSION TIME</span><select id="bio-duration"><option value="180" data-i18n="bio.duration.180">3 MIN</option><option value="300" selected data-i18n="bio.duration.300">5 MIN</option><option value="600" data-i18n="bio.duration.600">10 MIN</option></select></label>
             </section>
 
             <section class="setup-group compact">
@@ -67,8 +64,20 @@
               </div>
             </section>
 
+            <section class="setup-group">
+              <p><b>04</b> <span data-i18n="setup.map.prompt">Choose map</span></p>
+              <div class="map-options">
+                <button type="button" class="map-option selected" data-map="city">
+                  <span data-i18n="map.city.name">IRON HARBOR</span><small data-i18n="map.city.subtitle">INDUSTRIAL PORT / URBAN COMBAT</small><i>CITY</i>
+                </button>
+                <button type="button" class="map-option" data-map="wild">
+                  <span data-i18n="map.wild.name">RIDGELINE</span><small data-i18n="map.wild.subtitle">MOUNTAIN OUTPOST / OPEN TERRAIN</small><i>WILDS</i>
+                </button>
+              </div>
+            </section>
+
             <section class="setup-group compact">
-              <p><b>04</b> <span data-i18n="setup.loadout.prompt">Choose loadout</span></p>
+              <p><b>05</b> <span data-i18n="setup.loadout.prompt">Choose loadout</span></p>
               <div class="loadout-options">
                 <button type="button" class="loadout-option selected" data-loadout="recon"><b>01</b><span><strong data-i18n="loadout.recon.name">LONG-RANGE HUNTER</strong><small data-i18n="loadout.recon.summary">BARRETT · WHITE PISTOL · SWISS KNIFE · SMOKE GRENADE</small></span></button>
                 <button type="button" class="loadout-option" data-loadout="raider"><b>02</b><span><strong data-i18n="loadout.raider.name">BREACH RAIDER</strong><small data-i18n="loadout.raider.summary">AK-47 · BAIKE PISTOL · BATTLE AXE · FIREWORK GRENADE</small></span></button>
@@ -78,7 +87,7 @@
             </section>
 
             <section class="setup-group compact">
-              <p><b>05</b> <span data-i18n="setup.character.prompt">Choose character</span></p>
+              <p><b>06</b> <span data-i18n="setup.character.prompt">Choose character</span></p>
               <div class="character-options">
                 <button type="button" class="character-option selected" data-character="maleAgent"><i class="operator" data-character="maleAgent"></i><span><strong data-i18n="character.maleAgent.name">FIELD AGENT</strong><small data-i18n="character.maleAgent.description">ADULT MALE · PROFESSIONAL FIELD OPERATIVE</small></span></button>
                 <button type="button" class="character-option" data-character="glamSoldierBlack"><i class="operator" data-character="glamSoldierBlack"></i><span><strong data-i18n="character.glamSoldierBlack.name">GLAM SOLDIER · BLACK</strong><small data-i18n="character.glamSoldierBlack.description">ADULT FEMALE · DISTRESSED BLACK-STOCKING COMBAT KIT</small></span></button>
@@ -145,6 +154,7 @@
 
       <section id="hud" class="hud is-hidden" aria-live="polite">
         <div id="damage-overlay" class="damage-overlay" aria-hidden="true"></div>
+        <div id="bio-objective" class="bio-objective is-hidden" aria-live="polite"></div>
         <div class="top-bar">
           <div class="team-score seals">
             <span data-i18n="team.guardians">GUARDIANS</span>
@@ -196,6 +206,18 @@
           <small id="throwable-name">G · M18 SMOKE GRENADE</small>
         </aside>
 
+        <nav id="weapon-actions" class="weapon-actions" aria-label="Equipment">
+          <button type="button" data-weapon-slot="primary"><kbd>1</kbd><span data-i18n="hud.weapon.primary">PRIMARY</span></button>
+          <button type="button" data-weapon-slot="secondary"><kbd>2</kbd><span data-i18n="hud.weapon.secondary">SIDEARM</span></button>
+          <button type="button" data-weapon-slot="melee"><kbd>3</kbd><span data-i18n="hud.weapon.melee">MELEE</span></button>
+          <button type="button" id="backpack-toggle"><kbd>B</kbd><span data-i18n="mobile.loadout">PACK</span></button>
+          <small data-i18n="controls.cursor">TAB · CURSOR / AIM</small>
+        </nav>
+        <div id="flight-controls" class="flight-controls is-hidden">
+          <button type="button" data-climb="1"><kbd>SPACE</kbd><span data-i18n="flight.ascend">ASCEND</span></button>
+          <button type="button" data-climb="-1"><kbd>C</kbd><span data-i18n="flight.descend">DESCEND</span></button>
+          <span id="flight-altitude"></span>
+        </div>
         <div id="tank-hud" class="tank-hud is-hidden">
           <span><span data-i18n="hud.armor">ARMOR</span> <b id="tank-health">100</b></span><strong id="tank-speed">000</strong><small>KM/H</small>
           <p data-i18n="hud.tankDetail">INDEPENDENT TURRET · MOBILE FIRE · UNLIMITED SHELLS</p>

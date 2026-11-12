@@ -12,6 +12,10 @@ export class FirstPersonWeapon {
     this.camera = new THREE.PerspectiveCamera(58, 1, .01, 10);
     this.root = new THREE.Group();
     this.scene.add(this.root);
+    this.cockpit = new THREE.Group(); this.scene.add(this.cockpit);
+    const cockpitMaterial = resources.material("cockpit-frame", "#26312f", .7, .4);
+    for (const side of [-1, 1]) resources.mesh(this.cockpit, "box", cockpitMaterial, [side * .55, -.04, -.65], [.035, 1.2, .05], [0, 0, side * -.32]);
+    resources.mesh(this.cockpit, "box", cockpitMaterial, [0, -.43, -.5], [1.25, .12, .24], [-.3, 0, 0]);
     this.kick = this.swing = this.flashTime = this.time = 0;
     this.muzzleLight = new THREE.PointLight(0xffb75b, 0, 3, 2);
     this.root.add(this.muzzleLight);
@@ -65,7 +69,10 @@ export class FirstPersonWeapon {
     this.muzzleLight.position.copy(this.model.muzzle.position);
     this.flash.visible = this.flashTime > 0;
     this.muzzleLight.intensity = this.flashTime > 0 ? 2.5 : 0;
-    this.scene.visible = game.player.alive && !game.player.scoped && !game.currentVehicle;
+    const flying = game.currentVehicle?.type === "helicopter";
+    this.root.visible = !flying;
+    this.cockpit.visible = flying;
+    this.scene.visible = game.player.alive && !game.player.scoped && (!game.currentVehicle || flying);
   }
   dispose() { this.flashMaterial.dispose(); this.scene.clear(); }
 }

@@ -23,6 +23,11 @@ export function drawRadar(canvas, game) {
     ctx.strokeStyle = "#c6b87f";
     ctx.strokeRect(ox + vehicle.x * scale - 2.5, oy + vehicle.y * scale - 2.5, 5, 5);
   }
+  for (const monster of game.bio?.monsters || []) {
+    if (!monster.active || !monster.alive) continue;
+    ctx.fillStyle = "#a9e355";
+    ctx.beginPath(); ctx.arc(ox + monster.x * scale, oy + monster.y * scale, 5, 0, Math.PI * 2); ctx.fill();
+  }
   const player = game.player;
   ctx.strokeStyle = "#e8ece6";
   ctx.beginPath();

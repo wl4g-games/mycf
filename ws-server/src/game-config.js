@@ -1,7 +1,7 @@
 import { DEFAULT_TIME_LIMIT } from "./match-rules.js";
 
 export const TEAM = Object.freeze({ SEAL: "seal", TERROR: "terror" });
-export { DEFAULT_CONDITION_ID, DEFAULT_TIME_LIMIT, MATCH_CONDITIONS, MATCH_CONDITION_IDS, resolveMatchCondition } from "./match-rules.js";
+export { DEFAULT_CONDITION_ID, DEFAULT_TIME_LIMIT, MATCH_CONDITIONS, MATCH_CONDITION_IDS, BATTLE_MODE_IDS, BIO_DURATIONS, resolveBattleSettings, resolveMatchCondition } from "./match-rules.js";
 export { createMatchResult, alliedPodium, summarizeActorStats } from "./match-results.js";
 export const MATCH_TIME = DEFAULT_TIME_LIMIT;
 export const FOV = Math.PI / 2.75;
@@ -156,6 +156,13 @@ const wildVehicles = Object.freeze([
 ]);
 
 export const VEHICLE_TYPES = Object.freeze({
+  helicopter: Object.freeze({
+    id: "helicopter", nameKey: "vehicle.helicopter.name", interactKey: "hud.interactHelicopter", exitKey: "hud.exitHelicopter",
+    hudDetailKey: "hud.helicopterDetail", hudSlotKey: "hud.weapon.helicopter", radius: .65, interactionRange: 2.3,
+    maxHealth: 180, armorScale: .6, acceleration: 6, drag: 2, reverseSpeed: 3, maxSpeed: 5.5, steering: 1, speedSteering: 0,
+    weapon: Object.freeze({ id: "heliMG", kind: "hitscan", visual: "machinegun", interval: .085, damage: 30, range: 60, spread: .055,
+      nameKey: "weapon.heliMG.name", modeKey: "weapon.heliMG.detail", ammoKey: "hud.weapon.unlimited" }),
+  }),
   tank: Object.freeze({
     id: "tank",
     nameKey: "vehicle.tank.name",

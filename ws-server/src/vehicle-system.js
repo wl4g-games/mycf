@@ -42,6 +42,7 @@ export function resolveInteractionVehicle(vehicles, actor, requestedId = null, g
   return vehicles
     .filter(vehicle => (!requestedId || vehicle.id === requestedId)
       && !vehicle.driverId
+      && (vehicle.z || 0) < .6
       && vehicle.health > 0
       && distance(actor, vehicle) <= vehicleProfile(vehicle).interactionRange + Math.max(0, grace))
     .sort((left, right) => distance(actor, left) - distance(actor, right) || left.id.localeCompare(right.id))[0] || null;
@@ -65,6 +66,7 @@ export function vehicleExitCandidates(vehicle) {
 
 export function collidesWithVehicle(vehicles, x, y, radius, ignoredVehicleId = null) {
   return vehicles.some(vehicle => vehicle.id !== ignoredVehicleId
+    && (vehicle.z || 0) < .8
     && vehicle.health > 0
     && Math.hypot(vehicle.x - x, vehicle.y - y) < vehicleProfile(vehicle).radius + radius);
 }
