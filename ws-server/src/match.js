@@ -3,7 +3,7 @@ import {
   botCharacterId, clamp, createMatchResult, distance, isSolid, normalizeAngle, resolveCharacterId,
   resolveMatchCondition, spawnCells,
 } from "./game-config.js";
-import { createShotEvent } from "./shot-geometry.js";
+import { createShotEvent, clampAimPitch, withinTargetElevation } from "./shot-geometry.js";
 import {
   ACTOR_COLLISION_RADIUS, VEHICLE_ENTRY_GRACE, advanceVehicle, collidesWithActor, collidesWithVehicle,
   createVehicleStates, drivenVehicle, resolveInteractionVehicle, vehicleExitCandidates, vehicleProfile,
@@ -37,6 +37,7 @@ function publicActor(actor, ownActor) {
     x: actor.x,
     y: actor.y,
     angle: actor.angle,
+    pitch: clampAimPitch(actor.pitch),
     health: actor.health,
     alive: actor.alive,
     respawn: actor.respawn,
@@ -121,6 +122,7 @@ export class AuthoritativeMatch {
               y: clamp(Number(input?.movement?.y) || 0, -1, 1),
             },
             angle: normalizeAngle(Number(input?.angle) || 0),
+            pitch: clampAimPitch(input?.pitch),
             fireHeld: false,
             actions: [],
           }])
@@ -218,7 +220,7 @@ export class AuthoritativeMatch {
   }
 
   emptyInput(angle = 0) {
-    return { movement: { x: 0, y: 0 }, angle, fireHeld: false, actions: [] };
+    return { movement: { x: 0, y: 0 }, angle, pitch: 0, fireHeld: false, actions: [] };
   }
 
   assignmentFor(userId) {
@@ -236,6 +238,7 @@ export class AuthoritativeMatch {
       y: clamp(Number(movement.y) || 0, -1, 1),
     };
     if (Number.isFinite(payload.angle)) input.angle = normalizeAngle(payload.angle);
+    if (Number.isFinite(payload.pitch)) input.pitch = clampAimPitch(payload.pitch);
     input.fireHeld = Boolean(payload.fireHeld);
     if (Array.isArray(payload.actions)) {
       input.actions.push(...payload.actions.slice(0, 8).filter(action => Array.isArray(action) && typeof action[0] === "string"));
@@ -254,6 +257,7 @@ export class AuthoritativeMatch {
       const input = this.inputs.get(userId) || this.emptyInput(actor.angle);
       actor.cooldown = Math.max(0, actor.cooldown - dt);
       actor.angle = input.angle;
+      actor.pitch = input.pitch;
       const vehicle = drivenVehicle(this.vehicles, actor.id);
       if (vehicle) vehicle.turretAngle = actor.angle;
       for (const action of input.actions.splice(0)) this.handleAction(actor, action);
@@ -335,7 +339,7 @@ export class AuthoritativeMatch {
     for (const target of this.actors) {
       if (!target.alive || target.team === actor.team || target === actor) continue;
       const targetDistance = distance(actor, target);
-      if (targetDistance > range || !this.hasLineOfSight(actor, target)) continue;
+      if (targetDistance > range || !withinTargetElevation(actor, target) || !this.hasLineOfSight(actor, target)) continue;
       const angle = Math.abs(normalizeAngle(Math.atan2(target.y - actor.y, target.x - actor.x) - actor.angle));
       const allowed = Math.max(margin, Math.atan(.3 / targetDistance));
       if (angle < allowed && angle + targetDistance * .0005 < best) {
@@ -584,6 +588,7 @@ export class AuthoritativeMatch {
     actor.alive = true;
     actor.cooldown = .6;
     actor.angle = actor.team === TEAM.SEAL ? -Math.PI / 2 : Math.PI / 2;
+    actor.pitch = 0;
     actor.routeIndex = 0;
   }
 
@@ -673,6 +678,7 @@ export class AuthoritativeMatch {
       inputs: [...this.inputs].map(([userId, input]) => [userId, {
         movement: { ...input.movement },
         angle: input.angle,
+        pitch: clampAimPitch(input.pitch),
         fireHeld: false,
         actions: [],
       }]),

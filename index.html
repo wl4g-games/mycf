@@ -3,33 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-    <meta name="theme-color" content="#143a57" />
-    <meta name="description" content="Toon Strike is an original cartoon 3D H5 shooter with solo, online, and server-free LAN multiplayer." data-i18n-content="meta.description" />
+    <meta name="theme-color" content="#151d21" />
+    <meta name="description" content="Strike Operations is a real-time 3D tactical shooter with solo, online, and direct LAN multiplayer." data-i18n-content="meta.description" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23ffe15a'/%3E%3Cpath d='M14 20h36v10H38v20H26V30H14z' fill='%23173049'/%3E%3C/svg%3E" />
-    <title data-i18n="meta.title">Toon Strike</title>
-    <link rel="stylesheet" href="styles.css?v=20261008-grenade-v11" />
+    <title data-i18n="meta.title">Strike Operations</title>
+    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main id="game-shell">
       <canvas id="game" aria-label="Game view" data-i18n-aria-label="canvas.label"></canvas>
+      <div id="render-error" class="render-error is-hidden" role="alert"><p id="render-error-copy" data-i18n="render.unsupported">WebGL 2 is required. Enable hardware acceleration or use a supported browser.</p><button type="button" onclick="location.reload()" data-i18n="render.retry">RETRY</button></div>
 
       <section id="landing" class="landing map-city">
         <div class="landing-shade"></div>
-        <header class="brand"><span class="brand-mark">TS</span><span>TOON // STRIKE</span></header>
+        <header class="brand"><span class="brand-mark">SO</span><span>STRIKE // OPERATIONS</span></header>
         <button type="button" id="language-toggle" class="language-toggle" aria-label="Switch language">Language</button>
         <button type="button" id="parental-control-button" class="parental-control-button" aria-haspopup="dialog" aria-controls="parental-settings-layer">
           <b aria-hidden="true">PC</b><span data-i18n="parental.button">PARENT CONTROL</span><small id="parental-button-status">03:00</small>
         </button>
 
         <div class="landing-copy">
-          <p class="eyebrow">CARTOON 3D BROWSER COMBAT · H5</p>
-          <h1><span data-i18n="landing.title.top">TOON</span><br /><em data-i18n="landing.title.bottom">STRIKE</em></h1>
-          <p class="lead" data-i18n="landing.lead">Join the cheerful firefight in Bubble Harbor or Pinecone Valley. Choose a squad size and loadout, then drive a cartoon tank through the front line.</p>
-          <div class="feature-row"><span data-i18n="landing.feature.maps">2 CARTOON MAPS</span><i></i><span data-i18n="landing.feature.loadouts">4 LOADOUTS</span><i></i><span data-i18n="landing.feature.scale">UP TO 16V16</span></div>
+          <p class="eyebrow" data-i18n="landing.eyebrow">TACTICAL MULTIPLAYER / REAL-TIME 3D</p>
+          <h1><span data-i18n="landing.title.top">STRIKE</span><br /><em data-i18n="landing.title.bottom">OPS</em></h1>
+          <p class="lead" data-i18n="landing.lead">Deploy to the industrial harbor or mountain outpost. Choose your squad, equip your loadout, and take control of the battlefield.</p>
+          <div class="feature-row"><span data-i18n="landing.feature.maps">2 BATTLEFIELDS</span><i></i><span data-i18n="landing.feature.loadouts">4 LOADOUTS</span><i></i><span data-i18n="landing.feature.scale">UP TO 16V16</span></div>
         </div>
 
         <aside class="setup-panel">
-          <div class="setup-head"><span data-i18n="setup.title">DEPLOYMENT</span><b id="setup-code">TOON-CITY</b></div>
+          <div class="setup-head"><span data-i18n="setup.title">DEPLOYMENT</span><b id="setup-code">SECTOR-01</b></div>
 
           <section class="setup-group version-group">
             <p><b>01</b> <span data-i18n="setup.version.prompt">Choose game type</span></p>
@@ -44,11 +45,11 @@
             <section class="setup-group">
               <p><b>02</b> <span data-i18n="setup.map.prompt">Choose map</span></p>
               <div class="map-options">
-                <button type="button" class="map-option selected" data-map="city" style="--map-image:url('assets/toon-city.png')">
-                  <span data-i18n="map.city.name">BUBBLE HARBOR</span><small data-i18n="map.city.subtitle">PLAYFUL COASTAL CITY</small><i>CITY</i>
+                <button type="button" class="map-option selected" data-map="city">
+                  <span data-i18n="map.city.name">IRON HARBOR</span><small data-i18n="map.city.subtitle">INDUSTRIAL PORT / URBAN COMBAT</small><i>CITY</i>
                 </button>
-                <button type="button" class="map-option" data-map="wild" style="--map-image:url('assets/toon-wild.png')">
-                  <span data-i18n="map.wild.name">PINECONE VALLEY</span><small data-i18n="map.wild.subtitle">CARTOON WILDERNESS</small><i>WILDS</i>
+                <button type="button" class="map-option" data-map="wild">
+                  <span data-i18n="map.wild.name">RIDGELINE</span><small data-i18n="map.wild.subtitle">MOUNTAIN OUTPOST / OPEN TERRAIN</small><i>WILDS</i>
                 </button>
               </div>
             </section>
@@ -143,6 +144,7 @@
       </section>
 
       <section id="hud" class="hud is-hidden" aria-live="polite">
+        <div id="damage-overlay" class="damage-overlay" aria-hidden="true"></div>
         <div class="top-bar">
           <div class="team-score seals">
             <span data-i18n="team.guardians">GUARDIANS</span>
@@ -168,13 +170,13 @@
         </div>
 
         <div class="status-panel">
-          <p id="location">BUBBLE HARBOR · SOUTH OVERPASS</p>
+          <p id="location">IRON HARBOR · SOUTH OVERPASS</p>
           <div class="health-line"><span data-i18n="hud.health">HEALTH</span><b id="health">100</b></div>
           <div class="health-track"><i id="health-fill"></i></div>
         </div>
 
         <div id="kill-feed" class="kill-feed"></div>
-        <div id="interaction" class="interaction is-hidden"><kbd>F</kbd><span data-i18n="hud.interactTank">DRIVE M-77 BUBBLE TANK</span></div>
+        <div id="interaction" class="interaction is-hidden"><kbd>F</kbd><span data-i18n="hud.interactTank">DRIVE M-77 MAIN BATTLE TANK</span></div>
         <div id="announcement" class="announcement is-hidden"></div>
         <div id="crosshair" class="crosshair"><i></i><i></i><i></i><i></i><b></b></div>
         <div id="reticle-flash" class="reticle-flash" aria-hidden="true"></div>
@@ -183,7 +185,7 @@
         <div class="vignette"></div>
 
         <aside class="radar-wrap">
-          <div class="radar-head"><span id="radar-map">BUBBLE HARBOR</span><b id="alive-count">4 : 4</b></div>
+          <div class="radar-head"><span id="radar-map">IRON HARBOR</span><b id="alive-count">4 : 4</b></div>
           <canvas id="radar" width="240" height="168"></canvas>
         </aside>
 
@@ -313,6 +315,6 @@
         <button type="button" id="ranking-close" class="primary-button"><span data-i18n="ranking.backToPodium">BACK TO PODIUM</span></button>
       </section>
     </main>
-    <script type="module" src="src/main.js?v=20261008-grenade-v11"></script>
+    <script type="module" src="src/main.js"></script>
   </body>
 </html>

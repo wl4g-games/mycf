@@ -1,12 +1,12 @@
 <div align="center">
 
-# Toon Strike · 泡泡战区
+# Strike Operations · 战术行动
 
-**Cartoon squads, two battlefields, and vehicle combat in your browser.**<br>
-**卡通小队、双重战场与载具交火，打开浏览器即可开战。**
+**Real-time 3D combat, two tactical battlefields, and armored vehicles in your browser.**<br>
+**真实三维战场、战术小队与装甲交火，打开浏览器即可开战。**
 
 <p>
-  <a href="https://wl4g-games.github.io/mycf/"><img src="https://img.shields.io/badge/%E2%96%B6%20PLAY%20NOW-%E7%AB%8B%E5%8D%B3%E5%BC%80%E7%8E%A9-2eb9f0?style=for-the-badge" alt="Play Toon Strike · 立即开玩" height="42"></a>
+  <a href="https://wl4g-games.github.io/mycf/"><img src="https://img.shields.io/badge/%E2%96%B6%20PLAY%20NOW-%E7%AB%8B%E5%8D%B3%E5%BC%80%E7%8E%A9-2eb9f0?style=for-the-badge" alt="Play Strike Operations · 立即开玩" height="42"></a>
   <a href="https://github.com/wl4g-games/mycf/actions/workflows/ci.yml"><img src="https://github.com/wl4g-games/mycf/actions/workflows/ci.yml/badge.svg?event=pull_request" alt="Pull request CI status" height="28"></a>
   <a href="https://github.com/wl4g-games/mycf/actions/workflows/release.yml"><img src="https://github.com/wl4g-games/mycf/actions/workflows/release.yml/badge.svg?branch=main&event=push" alt="Release and deployment status" height="28"></a>
 </p>
@@ -21,9 +21,19 @@ Two maps · 两张地图 · Four battle sizes · 四种规模 · Four loadouts �
 
 ## About · 游戏简介
 
-Toon Strike is an original cartoon-style 3D H5 first-person shooter powered by a Canvas ray-casting renderer, code-drawn combatants and vehicles, layered Web Audio effects, a server-authoritative Node.js WebSocket mode, and a server-free WebRTC LAN mode. Its maps and visual assets were created specifically for this project and do not reuse recognizable third-party game maps, characters, logos, or artwork.
+Strike Operations is a real-time 3D H5 first-person shooter powered by Three.js 0.187.0, PBR materials, shadow-mapped sunlight, articulated mesh combatants, and independently aimed armored vehicles. GPU instancing batches static scenery and combat effects; three-mesh-bvh 0.9.18 accelerates nearby cover queries; postprocessing 6.39.6 provides SMAA, restrained bloom and ACES filmic tone mapping. Maps use original procedural geometry and generated material textures. Solo, authoritative Node.js WebSocket play, and server-free WebRTC LAN play share existing game rules.
 
-《泡泡战区》是一款原创动画片风格 3D H5 第一人称射击游戏，采用 Canvas 射线渲染、代码绘制的战斗角色与载具、Web Audio 分层音效、服务器权威的 Node.js WebSocket 网络模式，以及无需中心服务器的 WebRTC 局域网模式。地图与视觉素材均为本项目专门创作，不复用可识别的第三方游戏地图、角色、标志或美术资源。
+《战术行动》是一款基于 Three.js 0.187.0 的实时 3D H5 第一人称射击游戏，采用 PBR 材质、太阳光阴影、关节式网格角色与独立炮塔装甲载具。静态场景和战斗效果通过 GPU 实例化合批，three-mesh-bvh 0.9.18 加速近距离掩体查询，postprocessing 6.39.6 提供 SMAA 抗锯齿、克制的泛光与 ACES 电影色调映射。地图使用原创程序化几何体与生成材质纹理，单机、服务器权威 WebSocket 网络模式和无中心服务器 WebRTC 局域网模式共用现有作战规则。
+
+## Rendering · 三维渲染
+
+The live battlefield replaces the former Canvas ray-casting view, including the orbiting deployment preview. Rendering uses WebGL 2 with automatic resolution scaling, pooled effects, shared GPU resources and explicit map disposal. Only the minimap uses Canvas 2D. Mouse and touch aim support vertical rotation; solo, WebSocket and LAN inputs all carry the same pitch for target elevation checks. Gameplay movement and navigation remain on a horizontal map; this change does not add climbing, jumping, streamed open worlds, or imported photogrammetry assets.
+
+实时战场和部署预览均已替换原来的 Canvas 射线投影，采用 WebGL 2、自动分辨率调节、固定容量效果池、共享 GPU 资源与显式地图资源释放，仅小地图保留 Canvas 2D。鼠标与触屏支持上下转动视角，单机、WebSocket 与局域网模式均传递俯仰角进行目标高度检查。移动和导航仍在水平地图上，本次未加入攀爬、跳跃、流式开放世界或摄影测量模型。
+
+Run `npm run dev` and open the displayed URL. A WebGL 2 browser with hardware acceleration is required. For browser smoke tests, keep the dev server running, then use `npm run test:e2e`; set `CHROME_BIN` for your installed Chrome/Chromium executable and `MYCF_TEST_URL` for a different server URL. Screenshots are kept in a printed temporary directory. The smoke test covers both maps, 16v16, movement/fire, weapon switching and mobile resizing.
+
+执行 `npm run dev` 并打开显示的地址，浏览器须支持 WebGL 2 并启用硬件加速。浏览器测试需保持开发服务器运行，再执行 `npm run test:e2e`；可用 `CHROME_BIN` 指定本机 Chrome/Chromium 执行文件，用 `MYCF_TEST_URL` 指定测试服务器。截图保存在输出的临时目录，覆盖双地图、16v16、移动开火、武器切换和手机尺寸。
 
 ## Features · 核心功能
 
@@ -35,16 +45,16 @@ Toon Strike is an original cartoon-style 3D H5 first-person shooter powered by a
   单机版除玩家外全部由 AI NPC 控制；网络房主无需等真人满员即可开局，双方空缺席位会自动由 AI 补齐。
 - **Four battle sizes · 四种规模：** Play `1v1`, `4v4`, `8v8`, or `16v16`, with balanced teams in every mode. The default remains `4v4`.<br>
   支持 `1v1`、`4v4`、`8v8` 与 `16v16`，每种模式都会保持双方人数平衡，默认仍为 `4v4`。
-- **Two maps · 两张地图：** Fight across the coastal city of Bubble Harbor or the wilderness of Pinecone Valley.<br>
-  可在海港都市“泡泡港城”或野外区域“松果山谷”展开战斗。
+- **Two maps · 两张地图：** Fight across the coastal city of Iron Harbor or the wilderness of Ridgeline.<br>
+  可在海港都市“钢铁港区”或野外区域“山脊前哨”展开战斗。
 - **Four loadouts · 四套背包：** Switch among Barrett, AK-47, police machine-gun, and power-bow kits; the archer carries a Desert Eagle, dual blades, and smoke grenades.<br>
   可切换巴雷特、AK-47、警用机枪与大力弓箭套装；弓箭背包还包含沙漠之鹰、双刀与烟雾弹。
 - **Two drivable vehicles · 两种可驾驶载具：** Drive the M-77 tank or faster A-12 armored car, aim their turrets independently of the hull, and fire while moving.<br>
   可驾驶 M-77 坦克或速度更快的 A-12 装甲车，独立控制炮塔，并在移动中开火。
 - **Selectable match conditions · 可选胜利条件：** Choose `10 kills / 3 minutes`, `20 / 5`, `30 / 8`, or `50 / 12`; reaching the kill target or exhausting the paired timer ends the match.<br>
   可选择 `10 击杀 / 3 分钟`、`20 / 5`、`30 / 8` 或 `50 / 12`；达到击杀目标或用完对应时限都会结束比赛。
-- **Character selection and podium · 角色选择与领奖台：** Choose from two male and five adult female profiles before play. Each photoreal portrait carries an illustrative low-ready weapon, while the black-stocking variants show laddered runs and small fabric tears. Portraits appear only in setup and on the breathing podium for the three allied players with the most kills; actual loadouts remain independently selectable, and every live combatant remains a code-drawn cartoon character.<br>
-  开局前可从两名男性与五名成年女性角色中选择。每张真人角色图都手持低姿待命武器，黑丝袜角色还具有勾丝、梯形脱线与小破洞细节；真人图像只出现在选择页与带呼吸动效的我方击杀前三领奖台，实际作战背包仍可独立选择，正式战斗中的所有角色仍为代码绘制的动画风格。
+- **Character selection and podium · 角色选择与领奖台：** Choose from two male and five adult female profiles before play. Each photoreal portrait carries an illustrative low-ready weapon, while the black-stocking variants show laddered runs and small fabric tears. Portraits appear only in setup and on the breathing podium for the three allied players with the most kills; actual loadouts remain independently selectable, and live combatants use articulated 3D tactical meshes with profile-specific proportions and shared team materials.<br>
+  开局前可从两名男性与五名成年女性角色中选择。每张真人角色图都手持低姿待命武器，黑丝袜角色还具有勾丝、梯形脱线与小破洞细节；真人图像只出现在选择页与带呼吸动效的我方击杀前三领奖台，实际作战背包仍可独立选择，正式战斗使用具有不同角色比例、关节动作和共享阵营材质的三维战术模型。
 - **Multiplayer rooms · 多人房间：** Register a unique callsign, see available online players, create a room, send invitations, accept or decline invitations, and view post-match rankings.<br>
   可注册唯一作战别名、查看可邀请的在线玩家、创建房间、发送邀请、接受或拒绝邀请，并在赛后查看排名。
 - **Spatial battlefield audio · 立体战场音效：** Distinct layered weapon reports include mechanical and recoil-body tails; the player's alternating steps span both stereo channels, nearby teammate and enemy footsteps pan by screen direction, and an original packaged tactical recording reliably warns when an enemy grenade approaches. Browser speech remains a fallback if that asset cannot play and for other callouts.<br>
@@ -68,8 +78,8 @@ Toon Strike is an original cartoon-style 3D H5 first-person shooter powered by a
 
 | Category · 类别 | Option · 选项 | Equipment or setting · 装备或说明 |
 |---|---|---|
-| Map · 地图 | Bubble Harbor · 泡泡港城 | Playful coastal city · 欢乐海港都市战区 |
-| Map · 地图 | Pinecone Valley · 松果山谷 | Cartoon wilderness · 卡通野外行动区 |
+| Map · 地图 | Iron Harbor · 钢铁港区 | Industrial port · 工业港口巷战 |
+| Map · 地图 | Ridgeline · 山脊前哨 | Mountain outpost · 山地前哨战场 |
 | Loadout 01 · 背包 01 | Long-range Hunter · 远程猎手 | Barrett M82A1 · White Pistol · Swiss Knife · Smoke Grenade<br>巴雷特 M82A1 · 白壳手枪 · 瑞士军刀 · 烟雾弹 |
 | Loadout 02 · 背包 02 | Breach Raider · 突击破阵 | AK-47 · Baike Pistol · Battle Axe · Firework Grenade<br>AK-47 · 白克手枪 · 战斧 · 烟花手雷 |
 | Loadout 03 · 背包 03 | Police Firepower · 警用火力 | Police M7 · Dual Pistols · Swiss Knife · Skull Grenade<br>警用 M7 机枪 · 双持小手枪 · 瑞士军刀 · 骷髅手雷 |

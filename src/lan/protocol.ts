@@ -60,6 +60,7 @@ export interface LanActorState {
   y: number;
   angle: number;
   health: number;
+  pitch?: number;
   alive: boolean;
   respawn: number;
   kills: number;

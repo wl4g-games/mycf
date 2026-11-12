@@ -207,7 +207,7 @@ export const VEHICLE_TYPES = Object.freeze({
 export const MAPS = Object.freeze({
   city: {
     id: "city",
-    code: "TOON-CITY",
+    code: "SECTOR-01",
     nameKey: "map.city.name",
     subtitleKey: "map.city.subtitle",
     theme: "city",
@@ -224,7 +224,7 @@ export const MAPS = Object.freeze({
   },
   wild: {
     id: "wild",
-    code: "TOON-WILDS",
+    code: "SECTOR-02",
     nameKey: "map.wild.name",
     subtitleKey: "map.wild.subtitle",
     theme: "wild",

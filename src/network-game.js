@@ -214,6 +214,7 @@ export class NetworkGameState {
     this.client.sendInput({
       movement: input.movement,
       angle: this.localAngle,
+      pitch: this.localPitch,
       fireHeld: input.fireHeld,
       actions: this.pendingActions.splice(0),
     });

@@ -1,66 +1,48 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import * as THREE from "three";
+import { BattlefieldEffects } from "../src/three/effects.js";
+import { RenderResources, worldPoint } from "../src/three/resources.js";
+import { verticalFov } from "../src/renderer.js";
 
-import { Renderer } from "../src/renderer.js";
+const event = { type: "shot", actorId: "terror-0", profile: "rifle", from: { x: 0, y: 0, z: .68 }, to: { x: 8, y: 1, z: .58 }, hit: true, victimId: "seal-0" };
+const game = { player: { id: "seal-0", scoped: false }, projectiles: [], effects: [] };
 
-function rendererFixture() {
-  const renderer = Object.create(Renderer.prototype);
-  renderer.width = 1000;
-  renderer.height = 600;
-  renderer.motionTracker = { get: () => ({ activity: 0, phase: 0 }) };
-  renderer.weaponViewmodel = { muzzlePosition: () => ({ x: 680, y: 430 }) };
-  return renderer;
-}
-
-const camera = { id: "seal-0", x: 0, y: 0, angle: 0, alive: true, scoped: false, weaponId: "ak47" };
-const view = { focal: 620, horizon: 270, fov: 1.16 };
-
-test("local tracers begin at the rendered muzzle and advance into the scene", () => {
-  const renderer = rendererFixture();
-  const segment = renderer.tracerSegment({
-    actorId: camera.id,
-    from: { x: .3, y: 0, z: .68 },
-    to: { x: 8, y: .4, z: .58 },
-  }, { player: camera }, view.focal, view.horizon, view.fov);
-
-  assert.deepEqual(segment.start, { x: 680, y: 430 });
-  assert.ok(Number.isFinite(segment.end.x));
-  assert.ok(Number.isFinite(segment.end.y));
+test("authoritative shots become finite world-space beams with directional incoming-hit colors", () => {
+  const resources = new RenderResources();
+  const effects = new BattlefieldEffects(new THREE.Scene(), resources);
+  effects.trigger(event, game.player.id);
+  effects.update(game, .01, new THREE.PerspectiveCamera());
+  assert.equal(effects.beams.count, 1);
+  const matrix = new THREE.Matrix4();
+  effects.beams.getMatrixAt(0, matrix);
+  assert.ok(matrix.elements.every(Number.isFinite));
+  const position = new THREE.Vector3().setFromMatrixPosition(matrix);
+  const expected = worldPoint(event.from).add(worldPoint(event.to)).multiplyScalar(.5);
+  assert.ok(position.distanceTo(expected) < .00001);
+  const color = new THREE.Color();
+  effects.beams.getColorAt(0, color);
+  assert.ok(color.r > color.g && color.r > color.b);
+  effects.dispose(); resources.dispose();
 });
 
-test("confirmed incoming hits remain directional when the shooter is behind", () => {
-  const renderer = rendererFixture();
-  const segment = renderer.tracerSegment({
-    actorId: "terror-0",
-    incomingHit: true,
-    from: { x: -4, y: -1, z: .68 },
-    to: { x: 0, y: 0, z: .58 },
-  }, { player: camera }, view.focal, view.horizon, view.fov);
-
-  assert.equal(segment.end.x, renderer.width / 2);
-  assert.equal(segment.end.y, renderer.height / 2);
-  assert.ok(segment.start.x === renderer.width * .08 || segment.start.x === renderer.width * .92);
-  assert.ok(Number.isFinite(segment.start.y));
+test("effects have bounded GPU pools and expire without allocating more scene objects", () => {
+  const resources = new RenderResources();
+  const effects = new BattlefieldEffects(new THREE.Scene(), resources);
+  const camera = new THREE.PerspectiveCamera();
+  for (let i = 0; i < 200; i++) effects.trigger(event, game.player.id);
+  effects.update(game, .01, camera);
+  assert.equal(effects.beams.count, 96);
+  effects.update(game, .3, camera);
+  assert.equal(effects.beams.count, 0);
+  assert.equal(effects.root.children.length, 4);
+  effects.dispose(); resources.dispose();
 });
 
-test("ordinary remote tracers clip the near plane and reject fully hidden paths", () => {
-  const renderer = rendererFixture();
-  const crossing = renderer.tracerSegment({
-    actorId: "terror-0",
-    incomingHit: false,
-    from: { x: -1, y: .1, z: .68 },
-    to: { x: 4, y: .1, z: .58 },
-  }, { player: camera }, view.focal, view.horizon, view.fov);
-  assert.ok(Number.isFinite(crossing.start.x));
-  assert.ok(Number.isFinite(crossing.start.y));
-  assert.ok(Number.isFinite(crossing.end.x));
-  assert.ok(Number.isFinite(crossing.end.y));
-
-  const hidden = renderer.tracerSegment({
-    actorId: "terror-0",
-    incomingHit: false,
-    from: { x: -1, y: 0, z: .68 },
-    to: { x: -4, y: 0, z: .58 },
-  }, { player: camera }, view.focal, view.horizon, view.fov);
-  assert.equal(hidden, null);
+test("horizontal FOV stays consistent across landscape and portrait perspective cameras", () => {
+  for (const aspect of [16 / 9, 1, 390 / 844]) {
+    const horizontal = Math.PI / 2.75;
+    const vertical = verticalFov(horizontal, aspect) * Math.PI / 180;
+    assert.ok(Math.abs(2 * Math.atan(Math.tan(vertical / 2) * aspect) - horizontal) < 1e-10);
+  }
 });
